@@ -8,7 +8,7 @@ Project and feature documentation. Board hardware details live in BOARDS.md; cha
 - **In scope:**
   - Wi-Fi station connection with a DHCP address. Credentials are provisioned with the Espressif ESP BLE Provisioning app (F-002).
   - MCP server on the device, used only to pass message data in (F-003).
-  - Message queue of up to 100 messages, persisted across reboot, with lifecycle handled on the device: time-driven messages expire, and confirm-required messages stay until deleted with a button (F-004).
+  - Message queue of up to 30 messages, persisted across reboot, with lifecycle handled on the device: time-driven messages expire, and confirm-required messages stay until deleted with a button (F-004).
   - Message screen: a title on top and the message value in a large text area below. The value uses one of two font sizes and one of four text colors: white, blue, green, red (F-005).
   - Two buttons: delete (short press deletes the shown message, hold clears all) and scroll (loops through queued messages) (F-006).
   - Top status bar: IP address, queue depth, battery, clock (F-007).
@@ -38,7 +38,7 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 |--------|----------------|-------------|
 | Wi-Fi / provisioning | BLE provisioning, station connect with DHCP, reconnect (F-002) | TBD |
 | MCP server | HTTP transport, JSON-RPC, tool handling, validation, queue-full reporting (F-003) | TBD |
-| Message queue | Storage of up to 100 messages, expiry, delete, clear all, scroll position, persistence (F-004) | TBD |
+| Message queue | Up to 30 messages, validation, replace by id, expiry, delete, clear all, scroll position (F-004); persistence planned | `lib/message_queue/` |
 | Display / UI | Boot screen, welcome screen, top bar, message screen, queue-full popup, buffered rendering (F-005, F-007, F-009, F-010) | `src/main.cpp` (F-010 only so far) |
 | Buttons | Debounce, short press and hold detection (F-006) | TBD |
 | Time | NTP sync, timezone lookup by IP (F-008) | TBD |
@@ -69,7 +69,7 @@ lib/             Project-local libraries
 test/            Unit tests (native env for hardware-independent logic)
 ```
 
-platformio.ini, include/, and src/ exist since 0.0.1. lib/ and test/ are not created yet.
+platformio.ini, include/, and src/ exist since 0.0.1; lib/ and test/ since 0.0.2.
 
 ## Supported boards
 
@@ -111,27 +111,33 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Description:** The device hosts an MCP server on the local network, with no authentication (D-011). MCP is only for passing data in: clients submit messages to display. Clients such as Claude Code connect directly to the device's IP address.
 - **Source files:** TBD
 - **Behavior:**
-  - A message has a title, a value, a value font size (one of two), a value color (white, blue, green, red), and a kind (time-driven or confirm-required).
+  - A message has an optional id, a title, a value, a value font size (one of two), a value color (white, blue, green, red), a kind (time-driven or confirm-required), and for time-driven messages a duration in seconds. Limits are in D-016; the queue rejects input outside them (F-004).
+  - A message with the same id as a queued one replaces it (D-015).
   - When the queue is full, the message is dropped and the response tells the client the queue is full, so an LLM caller knows its message was not shown.
-  - TBD: MCP transport and protocol version, tool names, field names, maximum title and value length, how a time-driven message's duration is given, how other invalid input is reported.
+  - TBD: MCP transport and protocol version, tool names, field names, how invalid input is reported to the client (the response should state the limits).
 - **Verification:** TBD
 
 ### F-004 - Message queue and lifecycle
 
 - **Area:** Core logic
-- **Status:** Planned
-- **Added in version:** not yet implemented
+- **Status:** In progress (queue logic done in 0.0.2; persistence and firmware integration pending)
+- **Added in version:** 0.0.2
 - **Description:** The device owns message queuing, display order, and lifecycle. Two message kinds:
   - Time-driven: removed automatically when its time runs out.
   - Confirm-required: stays until the user deletes it with the delete button.
-- **Source files:** TBD
+- **Source files:** `lib/message_queue/src/message_queue.h`, `lib/message_queue/src/message_queue.cpp`, `test/test_message_queue/test_main.cpp`
 - **Behavior:**
-  - Capacity: 100 messages.
-  - Full queue: new messages are dropped and existing messages are kept. The device shows a popup saying the queue is full and new messages are dropped (F-005), and the MCP response reports it (F-003).
-  - Delete (short press) removes the shown message; clear all (hold) removes every message (F-006).
-  - Messages survive reboot (stored in flash).
-  - TBD: ordering and which message is shown by default, whether a new message replaces an existing one (for example by id), storage medium (NVS or LittleFS) and write strategy, how time-driven expiry is counted across a reboot.
-- **Verification:** TBD (planned: native unit tests, see Architecture).
+  - Capacity: 30 messages (D-008). Fixed slots, no heap: 224 bytes per message, 6,728 bytes for the whole queue on the ESP32 (measured with the xtensa toolchain).
+  - Validation (D-016): value required; id up to 16, title up to 30, value up to 160 characters; valid font size, color, and kind; time-driven duration 1 to 86400 seconds. Invalid input is rejected, not truncated. Confirm-required messages ignore the duration.
+  - Order (D-014): newest first. Adding a message moves the cursor (the shown message) to it.
+  - Replace by id (D-015): a message with the same non-empty id as a queued one replaces it and moves to the front. Replacing works even when the queue is full.
+  - Full queue: new messages without a matching id are dropped and existing messages are kept. The device shows a popup (F-005) and the MCP response reports it (F-003).
+  - Scroll: shows the next older message, wrapping from the oldest to the newest.
+  - Delete: removes the shown message of either kind, then shows the next older one (wrapping to the newest). Clear all removes every message (F-006).
+  - Expiry: time-driven messages are removed once the current time reaches added time + duration. When other messages are removed, the cursor stays on the message being shown.
+  - Time is passed in by the caller in milliseconds as a 64-bit value. The firmware must use a 64-bit uptime clock, not the 32-bit `millis()`, which wraps after about 49.7 days.
+  - Persistence (D-009, D-017), planned: messages survive reboot; time-driven messages restart their full duration after a reboot. Storage medium and write strategy TBD.
+- **Verification:** `pio test -e native`: 18 unit tests covering validation, limits, order, scroll, full queue, replace by id, delete, clear, and expiry with cursor handling.
 
 ### F-005 - Message screen and rendering
 
@@ -152,7 +158,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - GPIO35 (delete): short press deletes the currently shown message; hold clears all messages.
   - GPIO0 (scroll): short press shows the next queued message, wrapping from last to first.
 - **Source files:** TBD
-- **Behavior:** TBD: hold duration for clear all, whether clear all asks for confirmation, whether delete also removes time-driven messages.
+- **Behavior:** Delete removes messages of either kind (F-004). TBD: hold duration for clear all, whether clear all asks for confirmation.
 - **Verification:** TBD
 
 ### F-007 - Top status bar
@@ -234,7 +240,7 @@ Station mode on the local network, IP from DHCP (F-002). Credentials are never c
 ### Storage
 
 - **NVS keys:** TBD (Wi-Fi credentials from provisioning)
-- **Message persistence:** up to 100 messages survive reboot (F-004). Medium (NVS or LittleFS) TBD.
+- **Message persistence:** up to 30 messages survive reboot (F-004); time-driven messages restart their full duration (D-017). Medium (NVS or LittleFS) TBD.
 - **Filesystem:** TBD
 - **Partitions:** TBD
 
@@ -259,12 +265,16 @@ Record decisions that a later change could accidentally undo.
 | D-005 | One button deletes the shown message; the other scrolls through messages in a loop. Mapping in D-007. | User decision. | 2026-09-22 |
 | D-006 | Framework is Arduino (arduino-esp32) under PlatformIO. | User decision. The vendor display library (TFT_eSPI) and examples are Arduino. | 2026-09-22 |
 | D-007 | GPIO35 is delete (hold = clear all); GPIO0 is scroll. | The user left the mapping open. GPIO0 is a strapping pin (BOARDS.md Q-003), so the button that gets held stays off it. | 2026-09-22 |
-| D-008 | Queue holds 100 messages. When full, new messages are dropped (existing ones kept), a popup shows, and the MCP response reports it. | User decision. | 2026-09-22 |
+| D-008 | Queue holds 30 messages (changed from 100 by the user on 2026-09-22). When full, new messages are dropped (existing ones kept), a popup shows, and the MCP response reports it. | User decision. | 2026-09-22 |
 | D-009 | Messages persist across reboot. | User decision. | 2026-09-22 |
 | D-010 | IP address comes from DHCP. It shows on the welcome screen, in the top bar, and as a queued message. | User decision. | 2026-09-22 |
 | D-011 | The MCP server has no password or token. Anyone on the LAN can post messages. | User decision; accepted risk. | 2026-09-22 |
 | D-012 | Time from NTP; timezone from a lookup of the device's public IP. | User decision. | 2026-09-22 |
 | D-013 | Pins live in `include/pins.h`. TFT_eSPI is upstream `bodmer/TFT_eSPI@2.5.43`, configured by `include/tft_setup.h` (which includes pins.h); library files stay unmodified. The `tdisplay` env needs `-Iinclude` in build_flags. | One pin header. Without `-Iinclude`, TFT_eSPI does not see tft_setup.h and silently compiles with its default ILI9341 setup while src/ uses ours; the build still succeeds (observed in a verbose build). | 2026-09-22 |
+| D-014 | Newest message first; a new message is shown immediately. Scroll goes from newest to oldest and wraps. | User decision. | 2026-09-22 |
+| D-015 | A message may carry an optional id. A new message with the same id replaces the old one and moves to the front, also when the queue is full. | User decision, so repeated status updates from one sender take one slot. | 2026-09-22 |
+| D-016 | Limits: id 16, title 30, value 160 characters; time-driven duration 1 to 86400 seconds. Input outside the limits is rejected, not truncated. | The user left lengths open. Title: one small-font line; value: about a full screen of small font (about 6 lines of 30 characters, estimated, not measured). Rejecting lets the MCP client resend a shorter message instead of showing cut-off text. | 2026-09-22 |
+| D-017 | After a reboot, time-driven messages restart their full duration. | User decision. Needs no clock and no extra flash writes. | 2026-09-22 |
 
 ## Verification
 
@@ -282,8 +292,9 @@ pio test -e <env>                    # on-device tests
 
 Known unknowns and issues found outside the current task. Smaller per-feature details are listed as TBD in each feature entry.
 
-- MCP: transport and protocol version, tool names, field names, maximum title and value length, duration format for time-driven messages.
-- Persistence: storage medium (NVS or LittleFS) and how often it writes, to limit flash wear. How time-driven expiry is counted across a reboot, since the clock is unknown until NTP syncs.
+- MCP: transport and protocol version, tool names, field names.
+- Persistence: storage medium (NVS or LittleFS) and how often it writes, to limit flash wear.
 - Timezone: which geolocation service to use, and the fallback when it fails or there is no internet.
-- Memory budget (unverified): BLE provisioning, Wi-Fi, an HTTP MCP server, 100 stored messages, and a full-screen sprite (240 x 135 x 16 bit = 64,800 bytes) on an ESP32 without PSRAM. The maximum message length sets the queue's RAM size. Check once code exists.
+- Memory budget (unverified): BLE provisioning, Wi-Fi, an HTTP MCP server, the message queue (6,728 bytes, measured), and a full-screen sprite (240 x 135 x 16 bit = 64,800 bytes) on an ESP32 without PSRAM. Check once the firmware uses them.
+- Character set: the built-in TFT_eSPI fonts cover ASCII only. How non-ASCII text (accents, emoji) and newlines from MCP clients are handled is TBD (F-003, F-005).
 - `esp_app_desc` does not carry FW_VERSION. The built image reports project name `arduino-lib-builder` and app version `esp-idf: v4.4.7 38eeba213a`, from the precompiled Arduino core. This does not meet the AGENTS.md rule that esp_app_desc reads FW_VERSION. Options (override the descriptor, or accept it for the Arduino framework) TBD.

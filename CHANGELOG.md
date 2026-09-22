@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.1
+**Current firmware version:** 0.0.2
 
 ## Format
 
@@ -39,6 +39,31 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.2 - Add message queue with native tests
+
+**Date:** 2026-09-22 21:32
+**Author:** Claude Opus 5.5
+**Type:** Core logic
+
+**Summary:**
+Hardware-independent message queue (F-004): 30 messages, newest first, replace by id, drop when full, delete, clear all, scroll with wrap, and expiry of time-driven messages. Unit tests run on the host. The firmware does not use the queue yet, so device behavior is unchanged. Queue capacity changed from 100 to 30 (D-008).
+
+**Changes:**
+- `lib/message_queue/src/message_queue.h` - New. Message layout, limits, and queue interface.
+- `lib/message_queue/src/message_queue.cpp` - New. Validation, ordering, replace by id, delete, clear, scroll, expiry.
+- `test/test_message_queue/test_main.cpp` - New. 18 Unity tests.
+- `platformio.ini` - New `native` env for host tests; `FW_VERSION` bumped to `0.0.2`.
+- `PROJECT.md` - F-004 behavior and status; F-003, F-006, storage updated; D-008 changed to 30; D-014 to D-017 added; open questions updated.
+
+**Verification:**
+- `pio test -e native`: 18 of 18 tests passed.
+- `lib/message_queue` compiles without warnings with the ESP32 toolchain (gnu++11, -Wall -Wextra) and host g++ (-Wpedantic). Queue size on ESP32: 6,728 bytes.
+- `pio run -e tdisplay` succeeded: RAM 21,772 bytes (6.6%), flash 296,725 bytes (22.6%); same as 0.0.1 because src/ does not use the queue yet.
+- Not flashed: no behavior change on the device.
+
+**Git commit:**
+- `v0.0.2 - Add message queue with native tests`
 
 ## docs - Record 0.0.1 on-device verification
 
