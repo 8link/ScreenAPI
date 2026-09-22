@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.0 (no firmware yet)
+**Current firmware version:** 0.0.1
 
 ## Format
 
@@ -39,6 +39,33 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.1 - Add PlatformIO project and boot screen
+
+**Date:** 2026-09-22 21:18
+**Author:** Claude Opus 5.5
+**Type:** Firmware bring-up
+
+**Summary:**
+First firmware (F-010). PlatformIO project for the LilyGO TTGO T-Display with FW_VERSION defined once, a single pin header, and TFT_eSPI configured from the project. On boot the device prints its version on serial and shows it on screen.
+
+**Changes:**
+- `platformio.ini` - New. Shared `[env]` defines `FW_VERSION` `0.0.1`; env `tdisplay` (espressif32 7.0.1, board `lilygo-t-display`, Arduino, TFT_eSPI 2.5.43, `-Iinclude`).
+- `include/pins.h` - New. All T-Display pin assignments.
+- `include/tft_setup.h` - New. TFT_eSPI setup for the ST7789V 135 x 240 panel; includes pins.h.
+- `src/main.cpp` - New. Serial version line and centered boot screen.
+- `PROJECT.md` - F-010, D-013, repository layout, supported board env; open question on esp_app_desc.
+- `BOARDS.md` - Pin table mirrors include/pins.h; env `tdisplay`; Q-002 workaround; on-device verification steps.
+
+**Verification:**
+- `pio run -e tdisplay` succeeded: RAM 21,772 bytes (6.6%), flash 296,725 bytes (22.6%).
+- Preprocessor check of the TFT_eSPI library compile: ST7789_DRIVER, T-Display pins, CGRAM_OFFSET, 40 MHz SPI (D-013).
+- Only warning: TFT_eSPI notes TOUCH_CS is not defined (no touch on this board).
+- No native tests: no hardware-independent logic yet.
+- Not flashed: no board connected. On-device check per F-010 still pending.
+
+**Git commit:**
+- `v0.0.1 - Add PlatformIO project and boot screen`
 
 ## docs - Specify message format, queue, UI, and time features
 

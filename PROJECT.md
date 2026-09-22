@@ -39,7 +39,7 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 | Wi-Fi / provisioning | BLE provisioning, station connect with DHCP, reconnect (F-002) | TBD |
 | MCP server | HTTP transport, JSON-RPC, tool handling, validation, queue-full reporting (F-003) | TBD |
 | Message queue | Storage of up to 100 messages, expiry, delete, clear all, scroll position, persistence (F-004) | TBD |
-| Display / UI | Welcome screen, top bar, message screen, queue-full popup, buffered rendering (F-005, F-007, F-009) | TBD |
+| Display / UI | Boot screen, welcome screen, top bar, message screen, queue-full popup, buffered rendering (F-005, F-007, F-009, F-010) | `src/main.cpp` (F-010 only so far) |
 | Buttons | Debounce, short press and hold detection (F-006) | TBD |
 | Time | NTP sync, timezone lookup by IP (F-008) | TBD |
 | Battery | Voltage reading for the top bar (F-007) | TBD |
@@ -63,13 +63,13 @@ Top bar (IP, queue depth, battery, clock) above the message area. The message ar
 
 ```
 platformio.ini   PlatformIO environments; shared [env] defines FW_VERSION
-include/         Headers, including the single pin header (pins.h or config.h, TBD)
+include/         Headers: pins.h (single pin header), tft_setup.h (TFT_eSPI configuration)
 src/             Firmware sources
 lib/             Project-local libraries
 test/            Unit tests (native env for hardware-independent logic)
 ```
 
-Not created yet. Created with the first firmware change.
+platformio.ini, include/, and src/ exist since 0.0.1. lib/ and test/ are not created yet.
 
 ## Supported boards
 
@@ -77,7 +77,7 @@ Details for each board live in BOARDS.md.
 
 | Board | MCU | PlatformIO env | Status | Details |
 |-------|-----|----------------|--------|---------|
-| LilyGO TTGO T-Display | ESP32 (dual-core Xtensa LX6) | TBD (board id `lilygo-t-display`) | First target, not yet brought up | BOARDS.md "LilyGO TTGO T-Display" |
+| LilyGO TTGO T-Display | ESP32 (dual-core Xtensa LX6) | `tdisplay` (board id `lilygo-t-display`) | Builds since 0.0.1; not yet verified on device | BOARDS.md "LilyGO TTGO T-Display" |
 
 ## Feature log
 
@@ -185,6 +185,16 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Behavior:** TBD: how long the welcome screen stays, the kind of the IP message (time-driven or confirm-required), what happens on reconnect or IP change, what happens if the queue is full.
 - **Verification:** TBD
 
+### F-010 - Boot screen with firmware version
+
+- **Area:** Display
+- **Status:** In progress (builds; not verified on device)
+- **Added in version:** 0.0.1
+- **Description:** First firmware. Brings up the toolchain, display driver, and board: prints the firmware version on serial and shows it on screen.
+- **Source files:** `src/main.cpp`, `include/pins.h`, `include/tft_setup.h`, `platformio.ini`
+- **Behavior:** On boot, prints `ScreenAPI v<FW_VERSION>` on serial at 115200 baud. The screen, in landscape (rotation 1), shows "ScreenAPI" (font 4) and "v<FW_VERSION>" (font 2) centered, white on black, with the backlight on. The loop idles.
+- **Verification:** `pio run -e tdisplay` succeeds. On device (not yet done): serial shows `ScreenAPI v0.0.1` after the ROM boot log; both lines are centered, not shifted, clipped, or mirrored.
+
 <!-- Template for new entries:
 
 ### F-XXX - Title
@@ -254,6 +264,7 @@ Record decisions that a later change could accidentally undo.
 | D-010 | IP address comes from DHCP. It shows on the welcome screen, in the top bar, and as a queued message. | User decision. | 2026-09-22 |
 | D-011 | The MCP server has no password or token. Anyone on the LAN can post messages. | User decision; accepted risk. | 2026-09-22 |
 | D-012 | Time from NTP; timezone from a lookup of the device's public IP. | User decision. | 2026-09-22 |
+| D-013 | Pins live in `include/pins.h`. TFT_eSPI is upstream `bodmer/TFT_eSPI@2.5.43`, configured by `include/tft_setup.h` (which includes pins.h); library files stay unmodified. The `tdisplay` env needs `-Iinclude` in build_flags. | One pin header. Without `-Iinclude`, TFT_eSPI does not see tft_setup.h and silently compiles with its default ILI9341 setup while src/ uses ours; the build still succeeds (observed in a verbose build). | 2026-09-22 |
 
 ## Verification
 
@@ -271,9 +282,8 @@ pio test -e <env>                    # on-device tests
 
 Known unknowns and issues found outside the current task. Smaller per-feature details are listed as TBD in each feature entry.
 
-- Pin header name not decided (include/pins.h or include/config.h).
 - MCP: transport and protocol version, tool names, field names, maximum title and value length, duration format for time-driven messages.
 - Persistence: storage medium (NVS or LittleFS) and how often it writes, to limit flash wear. How time-driven expiry is counted across a reboot, since the clock is unknown until NTP syncs.
 - Timezone: which geolocation service to use, and the fallback when it fails or there is no internet.
 - Memory budget (unverified): BLE provisioning, Wi-Fi, an HTTP MCP server, 100 stored messages, and a full-screen sprite (240 x 135 x 16 bit = 64,800 bytes) on an ESP32 without PSRAM. The maximum message length sets the queue's RAM size. Check once code exists.
-- TFT_eSPI and Arduino core versions: the vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14; the installed PlatformIO platform ships a newer core (BOARDS.md Q-002). Decide at first build.
+- `esp_app_desc` does not carry FW_VERSION. The built image reports project name `arduino-lib-builder` and app version `esp-idf: v4.4.7 38eeba213a`, from the precompiled Arduino core. This does not meet the AGENTS.md rule that esp_app_desc reads FW_VERSION. Options (override the descriptor, or accept it for the Arduino framework) TBD.

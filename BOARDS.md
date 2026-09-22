@@ -6,7 +6,7 @@ Hardware reference. Record board specifications, quirks, and usage findings when
 
 | Board | Revision | MCU | PlatformIO env | Status |
 |-------|----------|-----|----------------|--------|
-| LilyGO TTGO T-Display | TBD (see Identification) | ESP32 | TBD (board id `lilygo-t-display`) | First target, not yet brought up |
+| LilyGO TTGO T-Display | TBD (see Identification) | ESP32 | `tdisplay` (board id `lilygo-t-display`) | Builds since 0.0.1; not yet verified on device |
 
 Copy the template at the end of this file once per new board.
 
@@ -37,7 +37,7 @@ Sources: vendor repository https://github.com/Xinyuan-LilyGO/TTGO-T-Display (rea
 
 ### Pin mapping
 
-No pin header exists in code yet. This table is transcribed from the vendor README and `Setup25_TTGO_T_Display.h`. Once include/pins.h or include/config.h exists, the header is the source of truth and this table mirrors it.
+Mirrors `include/pins.h`, which is the source of truth. Values come from the vendor README and `Setup25_TTGO_T_Display.h`.
 
 | Signal | GPIO | Direction | Peripheral | Notes |
 |--------|------|-----------|------------|-------|
@@ -47,13 +47,13 @@ No pin header exists in code yet. This table is transcribed from the vendor READ
 | TFT_DC | 16 | Out | Display | |
 | TFT_RST | 23 | Out | Display | |
 | TFT_BL | 4 | Out | Backlight | Active HIGH |
-| TFT_MISO | - | - | - | Not connected |
-| BUTTON1 | 35 | In | Button | Input-only pin, no internal pull-up. Active LOW per factory test (ext0 wake on LOW). |
-| BUTTON2 | 0 | In | Button | Strapping pin (Q-003) |
-| ADC_IN (battery) | 34 | In | ADC1 | Input-only. Battery through a 2:1 divider. |
-| ADC_EN | 14 | Out | Battery sense enable | Must be HIGH to measure on battery (Q-004) |
-| I2C_SDA | 21 | - | I2C | On header; no on-board I2C devices on the schematic |
-| I2C_SCL | 22 | - | I2C | On header |
+| TFT_MISO | - | - | - | Not connected; not defined in pins.h |
+| PIN_BUTTON_DELETE | 35 | In | Button | Input-only pin, no internal pull-up. Active LOW per factory test (ext0 wake on LOW). |
+| PIN_BUTTON_SCROLL | 0 | In | Button | Strapping pin (Q-003) |
+| PIN_BATTERY_ADC | 34 | In | ADC1 | Input-only. Battery through a 2:1 divider. |
+| PIN_ADC_EN | 14 | Out | Battery sense enable | Must be HIGH to measure on battery (Q-004) |
+| PIN_I2C_SDA | 21 | - | I2C | On header; no on-board I2C devices on the schematic |
+| PIN_I2C_SCL | 22 | - | I2C | On header |
 
 Reserved and unusable pins:
 
@@ -66,7 +66,7 @@ Reserved and unusable pins:
 
 | Peripheral | Bus | Address or CS | Driver | Notes |
 |------------|-----|---------------|--------|-------|
-| ST7789V 1.14 inch TFT, 135 x 240 | SPI (VSPI pins) | CS GPIO5 | TFT_eSPI (vendor bundles 2.2.20) | See Display |
+| ST7789V 1.14 inch TFT, 135 x 240 | SPI (VSPI pins) | CS GPIO5 | TFT_eSPI 2.5.43 (upstream; vendor bundles 2.2.20) | See Display |
 | Two push buttons | GPIO | GPIO35 (delete), GPIO0 (scroll) | TBD | Plus a reset button on CHIP_PU. Mapping per PROJECT.md D-007. |
 
 ### Power
@@ -155,7 +155,7 @@ None on board.
 | ID | Finding | Impact | Workaround | Verified (yes / no, date) |
 |----|---------|--------|------------|---------------------------|
 | Q-001 | The USB-UART bridge differs by revision. The 2019 schematic shows a CP2104. The PlatformIO board definition lists USB hwid 0x1A86:0x55D4 (WCH CH9102). The vendor README links both WCH and Silicon Labs drivers. | Wrong driver or no upload port on the host. | Check the chip on the unit or its USB VID:PID; install the matching driver if the OS lacks one. | no |
-| Q-002 | The vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14. The installed PlatformIO espressif32 7.0.1 ships framework-arduinoespressif32 3.20017 (arduino-esp32 2.0.17). | Possible build errors with the vendor library copy. | TBD: pin the platform version or use upstream TFT_eSPI. Decide at first build. | no |
+| Q-002 | The vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14. The installed PlatformIO espressif32 7.0.1 ships framework-arduinoespressif32 3.20017 (arduino-esp32 2.0.17). | Possible build errors with the vendor library copy. | Use upstream TFT_eSPI 2.5.43 from the PlatformIO registry, not the vendor copy (PROJECT.md D-013). Builds with espressif32 7.0.1. | Build: yes, 2026-09-22. Display output on device: no. |
 | Q-003 | GPIO0 is BUTTON2 and a strapping pin. Held LOW during reset, the chip enters download mode. | Holding that button while powering on or resetting stops normal boot. | Do not rely on GPIO0 being held at boot. GPIO0 is used only for short presses (scroll); the hold action (clear all) is on GPIO35 (PROJECT.md D-007). | no |
 | Q-004 | Battery voltage divider on GPIO34 is enabled by ADC_EN (GPIO14). Per the factory test comment, it is on by default with USB power, but GPIO14 must be driven HIGH on battery. | Battery reads wrong when GPIO14 is not HIGH. | Drive GPIO14 HIGH before sampling GPIO34. | no |
 
@@ -175,9 +175,9 @@ None on board.
 
 ### On-device verification
 
-- **Flash command:** `pio run -e <env> -t upload`
-- **Expected boot serial output:** TBD
-- **Smoke test:** TBD
+- **Flash command:** `pio run -e tdisplay -t upload`
+- **Expected boot serial output:** `ScreenAPI v<FW_VERSION>` after the ROM boot log (since 0.0.1; not yet observed)
+- **Smoke test:** backlight on; "ScreenAPI" and the version centered in landscape, not shifted, clipped, or mirrored (F-010)
 - **Known-good firmware version:** none yet
 
 ---
