@@ -26,12 +26,12 @@ Sources: vendor repository https://github.com/Xinyuan-LilyGO/TTGO-T-Display (rea
 
 ### MCU
 
-- **Chip:** ESP32, bare QFN48 chip on the schematic. Exact part number TBD.
+- **Chip:** ESP32-D0WDQ6, revision v1.0 (reported by esptool on the unit in hand, 2026-09-22). MAC 24:6f:28:25:36:e8.
 - **Cores:** 2 (Xtensa LX6)
 - **Clock:** 240 MHz (PlatformIO board definition)
 - **Flash (size / mode / speed):** 4 MB (W25Q32 on the schematic) / DIO / 40 MHz (PlatformIO board definition)
 - **PSRAM:** none. The vendor README says to select PSRAM Disabled; the schematic has no PSRAM.
-- **USB type:** USB-C via a USB-UART bridge chip; auto-reset through DTR/RTS transistors. The bridge chip varies by revision, see Q-001.
+- **USB type:** USB-C via a USB-UART bridge chip; auto-reset through DTR/RTS transistors. The unit in hand has a Silicon Labs CP2104 (USB 10c4:ea60). The bridge chip varies by revision, see Q-001.
 - **Partition scheme:** TBD
 - **Strapping pins:** GPIO0 (BUTTON2), GPIO2, GPIO5 (TFT_CS), GPIO12, GPIO15. See Q-003.
 
@@ -48,7 +48,7 @@ Mirrors `include/pins.h`, which is the source of truth. Values come from the ven
 | TFT_RST | 23 | Out | Display | |
 | TFT_BL | 4 | Out | Backlight | Active HIGH |
 | TFT_MISO | - | - | - | Not connected; not defined in pins.h |
-| PIN_BUTTON_DELETE | 35 | In | Button | Input-only pin, no internal pull-up. Active LOW per factory test (ext0 wake on LOW). |
+| PIN_BUTTON_DELETE | 35 | In | Button | Input-only pin, no internal pull-up; the board has an external one. Active LOW per factory test (ext0 wake on LOW). With `pinMode(INPUT)` the pin read idle HIGH: no phantom presses in 68 s untouched (0.0.3, 2026-09-22). |
 | PIN_BUTTON_SCROLL | 0 | In | Button | Strapping pin (Q-003) |
 | PIN_BATTERY_ADC | 34 | In | ADC1 | Input-only. Battery through a 2:1 divider. |
 | PIN_ADC_EN | 14 | Out | Battery sense enable | Must be HIGH to measure on battery (Q-004) |
@@ -94,10 +94,10 @@ Measured current per state:
 - **Controller:** ST7789V
 - **Resolution:** 135 x 240 (240 x 135 in landscape, rotation 1)
 - **Color depth:** 16 bit RGB565
-- **Rotation:** TBD for this project. The factory test uses rotation 1 (landscape) for the splash and rotation 0 for color fills.
+- **Rotation:** 1 (landscape, 240 x 135) in this project since 0.0.1. The factory test uses rotation 1 for the splash and rotation 0 for color fills.
 - **Bus and speed:** SPI write 40 MHz, read 6 MHz (Setup25). MISO not connected, so reads are not possible in practice.
 - **Backlight:** GPIO4, active HIGH. PWM dimming TBD.
-- **Refresh and flicker behavior:** TBD. A full-screen 16 bit sprite takes 240 x 135 x 2 = 64,800 bytes of internal RAM, since there is no PSRAM (calculation, not measured).
+- **Refresh and flicker behavior:** since 0.0.3 every frame is drawn into a full-screen 8-bit sprite (32,400 bytes) and pushed at once, up to every 33 ms while text scrolls (PROJECT.md D-019). A 16-bit sprite would take 64,800 bytes. Flicker and smoothness not yet confirmed by eye.
 - **Offsets and init quirks:** the 135 x 240 panel sits off-center in the ST7789 240 x 320 frame memory. TFT_eSPI handles this with `CGRAM_OFFSET` in Setup25. A custom driver must apply the offset itself.
 
 ### Sensors
@@ -166,7 +166,7 @@ ScreenAPI v0.0.1
 
 | ID | Finding | Impact | Workaround | Verified (yes / no, date) |
 |----|---------|--------|------------|---------------------------|
-| Q-001 | The USB-UART bridge differs by revision. The 2019 schematic shows a CP2104. The PlatformIO board definition lists USB hwid 0x1A86:0x55D4 (WCH CH9102). The vendor README links both WCH and Silicon Labs drivers. | Wrong driver or no upload port on the host. | Check the chip on the unit or its USB VID:PID; install the matching driver if the OS lacks one. | no |
+| Q-001 | The USB-UART bridge differs by revision. The 2019 schematic shows a CP2104. The PlatformIO board definition lists USB hwid 0x1A86:0x55D4 (WCH CH9102). The vendor README links both WCH and Silicon Labs drivers. | Wrong driver or no upload port on the host. | Check the chip on the unit or its USB VID:PID; install the matching driver if the OS lacks one. | yes, 2026-09-22: the unit in hand enumerates as 10c4:ea60 (CP2104); upload works with `--upload-port /dev/ttyUSB0`. |
 | Q-002 | The vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14. The installed PlatformIO espressif32 7.0.1 ships framework-arduinoespressif32 3.20017 (arduino-esp32 2.0.17). | Possible build errors with the vendor library copy. | Use upstream TFT_eSPI 2.5.43 from the PlatformIO registry, not the vendor copy (PROJECT.md D-013). Builds with espressif32 7.0.1. | yes, 2026-09-22 (build and display output with 0.0.1) |
 | Q-003 | GPIO0 is BUTTON2 and a strapping pin. Held LOW during reset, the chip enters download mode. | Holding that button while powering on or resetting stops normal boot. | Do not rely on GPIO0 being held at boot. GPIO0 is used only for short presses (scroll); the hold action (clear all) is on GPIO35 (PROJECT.md D-007). | no |
 | Q-004 | Battery voltage divider on GPIO34 is enabled by ADC_EN (GPIO14). Per the factory test comment, it is on by default with USB power, but GPIO14 must be driven HIGH on battery. | Battery reads wrong when GPIO14 is not HIGH. | Drive GPIO14 HIGH before sampling GPIO34. | no |
@@ -188,7 +188,15 @@ ScreenAPI v0.0.1
 ### On-device verification
 
 - **Flash command:** `pio run -e tdisplay -t upload`
-- **Expected boot serial output:** `ScreenAPI v<FW_VERSION>` after the ROM boot log (see UART, Boot-time noise). Observed with 0.0.1.
+- **Expected boot serial output:** after the ROM boot log (see UART, Boot-time noise), observed with 0.0.3 on 2026-09-22:
+
+```
+ScreenAPI v0.0.3                                              (0.2 s after reset)
+Queue: 5 messages                                             (2.3 s)
+Free heap: 295564 bytes, largest block: 110580 bytes          (2.3 s)
+```
+
+- **Serial capture without a terminal program:** opening the port can leave the chip in download mode (`boot:0x3 ... waiting for download`). Release DTR and RTS, then pulse RTS (EN) for 100 ms to reset into a normal boot.
 - **Smoke test:** backlight on; "ScreenAPI" and the version centered in landscape, not shifted, clipped, or mirrored (F-010)
 - **Known-good firmware version:** 0.0.1 (2026-09-22)
 

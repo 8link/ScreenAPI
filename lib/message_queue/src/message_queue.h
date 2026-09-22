@@ -10,8 +10,8 @@ namespace mq {
 
 constexpr size_t kCapacity = 30;
 constexpr size_t kIdMaxLen = 16;
-constexpr size_t kTitleMaxLen = 30;
-constexpr size_t kValueMaxLen = 160;
+constexpr size_t kTitleMaxLen = 64;
+constexpr size_t kValueMaxLen = 512;
 constexpr uint32_t kMaxDurationS = 86400;
 
 enum class FontSize : uint8_t { Small, Large };

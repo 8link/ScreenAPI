@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.2
+**Current firmware version:** 0.0.3
 
 ## Format
 
@@ -39,6 +39,36 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.3 - Add message screen, auto-scroll, and buttons
+
+**Date:** 2026-09-22 21:44
+**Author:** Claude Opus 5.5
+**Type:** Display, input
+
+**Summary:**
+The firmware now uses the message queue. Message screen with top bar, title, and word-wrapped value (F-005); a long title scrolls horizontally and a long value vertically (D-018). Delete, hold to clear all, and scroll buttons (F-006). Top bar shows queue position and count (F-007). Demo messages at boot until MCP exists (F-011). Title and value limits raised to 64 and 512 characters (D-016).
+
+**Changes:**
+- `src/screen.cpp`, `src/screen.h` - New. Layout, off-screen 8-bit sprite rendering, word wrap and auto-scroll, top bar, empty state, boot screen.
+- `src/main.cpp` - Buttons, expiry, screen updates, demo messages, 64-bit uptime clock, serial log of actions and free heap.
+- `lib/ui_logic/src/text_wrap.*` - New. Word wrap with a caller-supplied width function.
+- `lib/ui_logic/src/scroll_offset.*` - New. Pause, move, pause, jump-back scroll timing.
+- `lib/ui_logic/src/button_tracker.*` - New. Debounce, short press on release, long press while held.
+- `lib/message_queue/src/message_queue.h` - Title limit 64, value limit 512.
+- `test/test_ui_logic/test_main.cpp` - New. 14 tests for wrap, scroll timing, and buttons.
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.3`.
+- `PROJECT.md` - Screen layout; F-004 to F-007, F-010 updated; F-011 added; D-016 changed; D-018, D-019 added; memory baseline.
+- `BOARDS.md` - Chip ESP32-D0WDQ6 v1.0; Q-001 verified (CP2104); GPIO35 idle HIGH; rotation, refresh, boot log, serial capture note.
+
+**Verification:**
+- `pio test -e native`: 32 of 32 tests passed (18 queue, 14 UI logic).
+- `pio run -e tdisplay` succeeded: RAM 43,788 bytes (13.4%) static, flash 310,441 bytes (23.7%). No new warnings.
+- Flashed to the board. Serial: `ScreenAPI v0.0.3`, `Queue: 5 messages` at 2.3 s, free heap 295,564 bytes, largest block 110,580 bytes; timed demo messages expired at 32.3 s and 62.3 s; no phantom button events in 68 s.
+- Not yet checked: screen appearance, scrolling smoothness, flicker, and button presses (needs the user at the device).
+
+**Git commit:**
+- `v0.0.3 - Add message screen, auto-scroll, and buttons`
 
 ## 0.0.2 - Add message queue with native tests
 

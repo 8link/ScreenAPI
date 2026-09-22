@@ -9,7 +9,7 @@ Project and feature documentation. Board hardware details live in BOARDS.md; cha
   - Wi-Fi station connection with a DHCP address. Credentials are provisioned with the Espressif ESP BLE Provisioning app (F-002).
   - MCP server on the device, used only to pass message data in (F-003).
   - Message queue of up to 30 messages, persisted across reboot, with lifecycle handled on the device: time-driven messages expire, and confirm-required messages stay until deleted with a button (F-004).
-  - Message screen: a title on top and the message value in a large text area below. The value uses one of two font sizes and one of four text colors: white, blue, green, red (F-005).
+  - Message screen: a title on top and the message value in a large text area below. The value uses one of two font sizes and one of four text colors: white, blue, green, red. A title wider than the screen scrolls horizontally; a value taller than the text area scrolls vertically (F-005).
   - Two buttons: delete (short press deletes the shown message, hold clears all) and scroll (loops through queued messages) (F-006).
   - Top status bar: IP address, queue depth, battery, clock (F-007).
   - Clock from NTP, with the timezone derived from the device's public IP (F-008).
@@ -39,12 +39,14 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 | Wi-Fi / provisioning | BLE provisioning, station connect with DHCP, reconnect (F-002) | TBD |
 | MCP server | HTTP transport, JSON-RPC, tool handling, validation, queue-full reporting (F-003) | TBD |
 | Message queue | Up to 30 messages, validation, replace by id, expiry, delete, clear all, scroll position (F-004); persistence planned | `lib/message_queue/` |
-| Display / UI | Boot screen, welcome screen, top bar, message screen, queue-full popup, buffered rendering (F-005, F-007, F-009, F-010) | `src/main.cpp` (F-010 only so far) |
-| Buttons | Debounce, short press and hold detection (F-006) | TBD |
+| Display / UI | Boot screen, welcome screen, top bar, message screen, queue-full popup, buffered rendering (F-005, F-007, F-009, F-010) | `src/screen.cpp` |
+| UI logic | Word wrap, auto-scroll timing, button debounce and long press; hardware-independent (F-005, F-006) | `lib/ui_logic/` |
+| Buttons | Reading the pins and acting on button events (F-006) | `src/main.cpp` |
+| Main loop | Buttons, expiry, screen update; demo messages (F-011) | `src/main.cpp` |
 | Time | NTP sync, timezone lookup by IP (F-008) | TBD |
 | Battery | Voltage reading for the top bar (F-007) | TBD |
 
-The message queue should be hardware-independent so it can be tested in the native environment (AGENTS.md, Engineering rules).
+`lib/message_queue/` and `lib/ui_logic/` stay hardware-independent so they run in the native test environment (AGENTS.md, Engineering rules).
 
 ### Data flow
 
@@ -57,7 +59,15 @@ The message queue should be hardware-independent so it can be tested in the nati
 
 ### Screen layout
 
-Top bar (IP, queue depth, battery, clock) above the message area. The message area shows the title on top and the value in a large text box below. Orientation, pixel layout, and fonts are TBD.
+Landscape (rotation 1), 240 x 135 pixels, black background. Implemented in `src/screen.cpp` since 0.0.3.
+
+| Area | Rows (y) | Content |
+|------|----------|---------|
+| Top bar | 0 to 17, line at 18 | IP (left), position / count such as `2/5` (center), battery and clock (right); font 2, light grey (F-007) |
+| Title | 21 to 36, line at 39 | Message title, font 2, light grey; scrolls horizontally when wider than 232 px (F-005) |
+| Value | 41 to 134 (94 px) | Message value in the sender's font and color, word-wrapped to 232 px; scrolls vertically when taller than the area (F-005) |
+
+Left and right margins are 4 px.
 
 ### Planned repository layout
 
@@ -120,15 +130,15 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-004 - Message queue and lifecycle
 
 - **Area:** Core logic
-- **Status:** In progress (queue logic done in 0.0.2; persistence and firmware integration pending)
+- **Status:** In progress (queue logic in 0.0.2, used by the firmware since 0.0.3; persistence pending)
 - **Added in version:** 0.0.2
 - **Description:** The device owns message queuing, display order, and lifecycle. Two message kinds:
   - Time-driven: removed automatically when its time runs out.
   - Confirm-required: stays until the user deletes it with the delete button.
 - **Source files:** `lib/message_queue/src/message_queue.h`, `lib/message_queue/src/message_queue.cpp`, `test/test_message_queue/test_main.cpp`
 - **Behavior:**
-  - Capacity: 30 messages (D-008). Fixed slots, no heap: 224 bytes per message, 6,728 bytes for the whole queue on the ESP32 (measured with the xtensa toolchain).
-  - Validation (D-016): value required; id up to 16, title up to 30, value up to 160 characters; valid font size, color, and kind; time-driven duration 1 to 86400 seconds. Invalid input is rejected, not truncated. Confirm-required messages ignore the duration.
+  - Capacity: 30 messages (D-008). Fixed slots, no heap: 616 bytes per message, 18,488 bytes for the whole queue on the ESP32 (measured with the xtensa toolchain, 0.0.3).
+  - Validation (D-016): value required; id up to 16, title up to 64, value up to 512 characters; valid font size, color, and kind; time-driven duration 1 to 86400 seconds. Invalid input is rejected, not truncated. Confirm-required messages ignore the duration.
   - Order (D-014): newest first. Adding a message moves the cursor (the shown message) to it.
   - Replace by id (D-015): a message with the same non-empty id as a queued one replaces it and moves to the front. Replacing works even when the queue is full.
   - Full queue: new messages without a matching id are dropped and existing messages are kept. The device shows a popup (F-005) and the MCP response reports it (F-003).
@@ -142,33 +152,45 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-005 - Message screen and rendering
 
 - **Area:** Display
-- **Status:** Planned
-- **Added in version:** not yet implemented
-- **Description:** The message screen shows the message title on top and the message value in a large text area below, under the top bar (F-007). The title has one fixed style. The value uses the font size (one of two) and color (white, blue, green, red) chosen by the sender (D-004). When the queue is full, a popup says so.
-- **Source files:** TBD
-- **Behavior:** TBD: fonts, background color, orientation, wrapping and truncation, scroll position indicator, popup text and duration, what shows when the queue is empty. Refreshes use buffered (off-screen) rendering (AGENTS.md).
-- **Verification:** TBD
+- **Status:** In progress (message screen in 0.0.3; queue-full popup pending with F-003)
+- **Added in version:** 0.0.3
+- **Description:** The message screen shows the message title on top and the message value in a large text area below, under the top bar (F-007). The title has one fixed style. The value uses the font size (one of two) and color (white, blue, green, red) chosen by the sender (D-004). Long text scrolls automatically (D-018). When the queue is full, a popup says so.
+- **Source files:** `src/screen.cpp`, `src/screen.h`, `lib/ui_logic/src/text_wrap.*`, `lib/ui_logic/src/scroll_offset.*`
+- **Behavior:**
+  - Layout: see Architecture, Screen layout.
+  - Fonts: small = TFT_eSPI font 2 (16 px line height), large = font 4 (26 px). Title: font 2, light grey.
+  - Colors: white, blue (0x4C9F, lighter than TFT_BLUE for readability on black), green, red.
+  - Word wrap at spaces; a word wider than the line is broken; `\n` starts a new line.
+  - Auto-scroll (D-018): a title wider than 232 px scrolls horizontally at 40 px/s; a value taller than 94 px scrolls vertically at 20 px/s. Each pauses 1.5 s at the start, moves to the end, pauses 1.5 s, then jumps back. Scrolling restarts only when the shown text or font changes.
+  - Empty queue: "No messages" centered in the value area.
+  - Rendering (D-019): each frame is drawn into one full-screen 8-bit sprite and pushed at once. Redraws happen on queue changes and every 33 ms only while something scrolls.
+  - TBD: queue-full popup text and duration (with F-003), handling of non-ASCII characters.
+- **Verification:** `pio test -e native` covers word wrap and scroll timing. On device (0.0.3, 2026-09-22): serial log confirms boot and demo messages; screen appearance not yet confirmed by the user. Expected: the first demo title scrolls sideways, its value scrolls down, the red large-font message scrolls down, no flicker.
 
 ### F-006 - Buttons: delete, clear all, scroll
 
 - **Area:** Input
-- **Status:** Planned
-- **Added in version:** not yet implemented
+- **Status:** In progress (implemented in 0.0.3; not yet confirmed on device)
+- **Added in version:** 0.0.3
 - **Description:** Button mapping (D-007):
   - GPIO35 (delete): short press deletes the currently shown message; hold clears all messages.
   - GPIO0 (scroll): short press shows the next queued message, wrapping from last to first.
-- **Source files:** TBD
-- **Behavior:** Delete removes messages of either kind (F-004). TBD: hold duration for clear all, whether clear all asks for confirmation.
-- **Verification:** TBD
+- **Source files:** `src/main.cpp`, `lib/ui_logic/src/button_tracker.*`
+- **Behavior:**
+  - Both buttons are active LOW, debounced for 30 ms.
+  - Delete: short press fires on release and removes the shown message of either kind (F-004). Holding for 1.5 s clears all messages; it fires while still held, without a confirmation step, and the release after it does nothing.
+  - Scroll: short press shows the next older message, wrapping to the newest; does nothing with fewer than two messages. Long press has no action.
+  - Each action is logged on serial: `Deleted message, N left`, `Cleared all messages`, `Showing message N of M`.
+- **Verification:** `pio test -e native` covers debounce, short press, and long press. On device: TBD (press each button and check the screen and serial log).
 
 ### F-007 - Top status bar
 
 - **Area:** Display
-- **Status:** Planned
-- **Added in version:** not yet implemented
+- **Status:** In progress (layout and queue position in 0.0.3)
+- **Added in version:** 0.0.3
 - **Description:** A bar across the top of the screen shows the IP address, queue depth, battery, and clock (F-008).
-- **Source files:** TBD
-- **Behavior:** TBD: layout, battery format (voltage, percent, or icon) and what shows on USB power without a battery, what shows before Wi-Fi connects and before the clock is set, update intervals.
+- **Source files:** `src/screen.cpp`
+- **Behavior:** Center shows the shown message's position and the queue count, such as `2/5` (`0/0` when empty). IP (`no network`), battery (`--%`), and clock (`--:--`) are placeholders until F-002, the battery reading, and F-008 exist. TBD: battery format (voltage, percent, or icon) and what shows on USB power without a battery, what shows before Wi-Fi connects and before the clock is set, update intervals.
 - **Verification:** TBD
 
 ### F-008 - Clock with NTP and IP-based timezone
@@ -197,9 +219,19 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Status:** Done
 - **Added in version:** 0.0.1
 - **Description:** First firmware. Brings up the toolchain, display driver, and board: prints the firmware version on serial and shows it on screen.
-- **Source files:** `src/main.cpp`, `include/pins.h`, `include/tft_setup.h`, `platformio.ini`
-- **Behavior:** On boot, prints `ScreenAPI v<FW_VERSION>` on serial at 115200 baud. The screen, in landscape (rotation 1), shows "ScreenAPI" (font 4) and "v<FW_VERSION>" (font 2) centered, white on black, with the backlight on. The loop idles.
+- **Source files:** `src/main.cpp`, `src/screen.cpp`, `include/pins.h`, `include/tft_setup.h`, `platformio.ini`
+- **Behavior:** On boot, prints `ScreenAPI v<FW_VERSION>` on serial at 115200 baud. The screen, in landscape (rotation 1), shows "ScreenAPI" (font 4) and "v<FW_VERSION>" (font 2) centered, white on black, with the backlight on. Since 0.0.3 the boot screen stays for 1.5 s, then the message screen (F-005) follows.
 - **Verification:** `pio run -e tdisplay` succeeds. On device, 2026-09-22 (reported by the user): serial shows `ScreenAPI v0.0.1` after the ROM boot log (BOARDS.md, On-device verification); the screen works.
+
+### F-011 - Demo messages (temporary)
+
+- **Area:** Test
+- **Status:** In progress (temporary; remove when messages arrive over MCP, F-003)
+- **Added in version:** 0.0.3
+- **Description:** Five sample messages added at boot so the message screen, scrolling, buttons, and expiry can be tried before MCP exists.
+- **Source files:** `src/main.cpp` (`addDemoMessages`)
+- **Behavior:** Shown first: a confirm message with a title and value long enough to scroll both ways. Then: a blue small-font confirm message; a green large-font message that expires after 30 s; a red large-font confirm message long enough to scroll; a white message that expires after 60 s. Serial prints `Queue: 5 messages` and the free heap after boot.
+- **Verification:** On device, 2026-09-22: serial shows `Queue: 5 messages` at 2.3 s and `Timed message expired` at 32.3 s and 62.3 s after reset.
 
 <!-- Template for new entries:
 
@@ -273,8 +305,10 @@ Record decisions that a later change could accidentally undo.
 | D-013 | Pins live in `include/pins.h`. TFT_eSPI is upstream `bodmer/TFT_eSPI@2.5.43`, configured by `include/tft_setup.h` (which includes pins.h); library files stay unmodified. The `tdisplay` env needs `-Iinclude` in build_flags. | One pin header. Without `-Iinclude`, TFT_eSPI does not see tft_setup.h and silently compiles with its default ILI9341 setup while src/ uses ours; the build still succeeds (observed in a verbose build). | 2026-09-22 |
 | D-014 | Newest message first; a new message is shown immediately. Scroll goes from newest to oldest and wraps. | User decision. | 2026-09-22 |
 | D-015 | A message may carry an optional id. A new message with the same id replaces the old one and moves to the front, also when the queue is full. | User decision, so repeated status updates from one sender take one slot. | 2026-09-22 |
-| D-016 | Limits: id 16, title 30, value 160 characters; time-driven duration 1 to 86400 seconds. Input outside the limits is rejected, not truncated. | The user left lengths open. Title: one small-font line; value: about a full screen of small font (about 6 lines of 30 characters, estimated, not measured). Rejecting lets the MCP client resend a shorter message instead of showing cut-off text. | 2026-09-22 |
+| D-016 | Limits: id 16, title 64, value 512 characters (raised from 30 and 160 in 0.0.3); time-driven duration 1 to 86400 seconds. Input outside the limits is rejected, not truncated. | The user asked for longer titles and values, with scrolling (D-018), and left the numbers open. 30 messages at these limits take 18,488 bytes. Rejecting lets the MCP client resend a shorter message instead of showing cut-off text. | 2026-09-22 |
 | D-017 | After a reboot, time-driven messages restart their full duration. | User decision. Needs no clock and no extra flash writes. | 2026-09-22 |
+| D-018 | Long text scrolls automatically: the title horizontally, the value vertically. | User decision. Both buttons are already used (D-005), so scrolling needs no input. | 2026-09-22 |
+| D-019 | The screen is drawn into one full-screen 8-bit sprite (240 x 135, 32,400 bytes) and pushed at once. | Flicker-free redraws (AGENTS.md). 8-bit halves the RAM of a 16-bit buffer, and the four text colors and greys survive the reduction. | 2026-09-22 |
 
 ## Verification
 
@@ -295,6 +329,6 @@ Known unknowns and issues found outside the current task. Smaller per-feature de
 - MCP: transport and protocol version, tool names, field names.
 - Persistence: storage medium (NVS or LittleFS) and how often it writes, to limit flash wear.
 - Timezone: which geolocation service to use, and the fallback when it fails or there is no internet.
-- Memory budget (unverified): BLE provisioning, Wi-Fi, an HTTP MCP server, the message queue (6,728 bytes, measured), and a full-screen sprite (240 x 135 x 16 bit = 64,800 bytes) on an ESP32 without PSRAM. Check once the firmware uses them.
-- Character set: the built-in TFT_eSPI fonts cover ASCII only. How non-ASCII text (accents, emoji) and newlines from MCP clients are handled is TBD (F-003, F-005).
+- Memory budget: BLE provisioning, Wi-Fi, and an HTTP MCP server still have to fit on an ESP32 without PSRAM. Baseline with 0.0.3 (queue 18,488 bytes, 8-bit screen buffer 32,400 bytes): free heap 295,564 bytes, largest free block 110,580 bytes after boot. Re-check as each feature lands.
+- Character set: the built-in TFT_eSPI fonts cover ASCII only. How non-ASCII text (accents, emoji) from MCP clients is handled is TBD (F-003, F-005). Newlines are supported since 0.0.3.
 - `esp_app_desc` does not carry FW_VERSION. The built image reports project name `arduino-lib-builder` and app version `esp-idf: v4.4.7 38eeba213a`, from the precompiled Arduino core. This does not meet the AGENTS.md rule that esp_app_desc reads FW_VERSION. Options (override the descriptor, or accept it for the Arduino framework) TBD.
