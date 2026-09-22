@@ -22,7 +22,7 @@ Sources: vendor repository https://github.com/Xinyuan-LilyGO/TTGO-T-Display (rea
 - **Revision:** TBD for the unit in hand. The vendor README pinout column is labeled "V18"; the schematic is dated 2019-06-26.
 - **Vendor:** LilyGO (Xinyuan)
 - **PlatformIO board id:** `lilygo-t-display`
-- **Framework:** TBD (the board id supports arduino and espidf)
+- **Framework:** Arduino (arduino-esp32), PROJECT.md D-006
 
 ### MCU
 
@@ -67,7 +67,7 @@ Reserved and unusable pins:
 | Peripheral | Bus | Address or CS | Driver | Notes |
 |------------|-----|---------------|--------|-------|
 | ST7789V 1.14 inch TFT, 135 x 240 | SPI (VSPI pins) | CS GPIO5 | TFT_eSPI (vendor bundles 2.2.20) | See Display |
-| Two push buttons | GPIO | GPIO35, GPIO0 | TBD | Plus a reset button on CHIP_PU |
+| Two push buttons | GPIO | GPIO35 (delete), GPIO0 (scroll) | TBD | Plus a reset button on CHIP_PU. Mapping per PROJECT.md D-007. |
 
 ### Power
 
@@ -156,7 +156,7 @@ None on board.
 |----|---------|--------|------------|---------------------------|
 | Q-001 | The USB-UART bridge differs by revision. The 2019 schematic shows a CP2104. The PlatformIO board definition lists USB hwid 0x1A86:0x55D4 (WCH CH9102). The vendor README links both WCH and Silicon Labs drivers. | Wrong driver or no upload port on the host. | Check the chip on the unit or its USB VID:PID; install the matching driver if the OS lacks one. | no |
 | Q-002 | The vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14. The installed PlatformIO espressif32 7.0.1 ships framework-arduinoespressif32 3.20017 (arduino-esp32 2.0.17). | Possible build errors with the vendor library copy. | TBD: pin the platform version or use upstream TFT_eSPI. Decide at first build. | no |
-| Q-003 | GPIO0 is BUTTON2 and a strapping pin. Held LOW during reset, the chip enters download mode. | Holding that button while powering on or resetting stops normal boot. | Do not rely on GPIO0 being held at boot. Prefer GPIO35 for the more frequent action (open question in PROJECT.md). | no |
+| Q-003 | GPIO0 is BUTTON2 and a strapping pin. Held LOW during reset, the chip enters download mode. | Holding that button while powering on or resetting stops normal boot. | Do not rely on GPIO0 being held at boot. GPIO0 is used only for short presses (scroll); the hold action (clear all) is on GPIO35 (PROJECT.md D-007). | no |
 | Q-004 | Battery voltage divider on GPIO34 is enabled by ADC_EN (GPIO14). Per the factory test comment, it is on by default with USB power, but GPIO14 must be driven HIGH on battery. | Battery reads wrong when GPIO14 is not HIGH. | Drive GPIO14 HIGH before sampling GPIO34. | no |
 
 ### Protocol findings

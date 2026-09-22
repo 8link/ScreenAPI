@@ -6,20 +6,25 @@ Project and feature documentation. Board hardware details live in BOARDS.md; cha
 
 - **Purpose:** A small desk display on the local network. The ESP32 joins local Wi-Fi and hosts an MCP (Model Context Protocol) server. MCP clients send messages to it, and the device shows them on its screen. Example: Claude Code sends its working status, and the user sees it on the desk.
 - **In scope:**
-  - Wi-Fi station connection. Credentials are provisioned with the Espressif ESP BLE Provisioning app (F-002).
+  - Wi-Fi station connection with a DHCP address. Credentials are provisioned with the Espressif ESP BLE Provisioning app (F-002).
   - MCP server on the device, used only to pass message data in (F-003).
-  - Message queue and lifecycle handled on the device: time-driven messages expire, and confirm-required messages stay until deleted with a button (F-004).
-  - Rendering: two font sizes, four text colors (white, blue, green, red) (F-005).
-  - Two buttons: one confirms (deletes) the shown message, the other scrolls through queued messages in a loop (F-006).
+  - Message queue of up to 100 messages, persisted across reboot, with lifecycle handled on the device: time-driven messages expire, and confirm-required messages stay until deleted with a button (F-004).
+  - Message screen: a title on top and the message value in a large text area below. The value uses one of two font sizes and one of four text colors: white, blue, green, red (F-005).
+  - Two buttons: delete (short press deletes the shown message, hold clears all) and scroll (loops through queued messages) (F-006).
+  - Top status bar: IP address, queue depth, battery, clock (F-007).
+  - Clock from NTP, with the timezone derived from the device's public IP (F-008).
+  - Welcome screen showing the IP address; the IP is also added to the queue as a message (F-009).
 - **Out of scope:**
   - MCP is not used for device control or configuration beyond passing message data.
   - Wi-Fi credentials are not entered over MCP or hardcoded in firmware.
+  - Authentication on the MCP server (D-011).
 - **Current firmware version:** see the header of CHANGELOG.md (mirrors `FW_VERSION` in platformio.ini once it exists).
 
 ## Architecture
 
 ### Runtime model
 
+- **Framework:** Arduino (arduino-esp32) under PlatformIO (D-006).
 - **Execution model (tasks / loop):** TBD
 - **Core assignment:** TBD
 - **Task priorities:** TBD
@@ -31,19 +36,28 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 
 | Module | Responsibility | Source path |
 |--------|----------------|-------------|
-| Wi-Fi / provisioning | BLE provisioning, station connect, reconnect (F-002) | TBD |
-| MCP server | HTTP transport, JSON-RPC, tool handling, validation (F-003) | TBD |
-| Message queue | Storage, expiry, confirm, scroll position (F-004) | TBD |
-| Display | Rendering with two font sizes and four colors, buffered (F-005) | TBD |
-| Buttons | Debounce, confirm and scroll events (F-006) | TBD |
+| Wi-Fi / provisioning | BLE provisioning, station connect with DHCP, reconnect (F-002) | TBD |
+| MCP server | HTTP transport, JSON-RPC, tool handling, validation, queue-full reporting (F-003) | TBD |
+| Message queue | Storage of up to 100 messages, expiry, delete, clear all, scroll position, persistence (F-004) | TBD |
+| Display / UI | Welcome screen, top bar, message screen, queue-full popup, buffered rendering (F-005, F-007, F-009) | TBD |
+| Buttons | Debounce, short press and hold detection (F-006) | TBD |
+| Time | NTP sync, timezone lookup by IP (F-008) | TBD |
+| Battery | Voltage reading for the top bar (F-007) | TBD |
 
 The message queue should be hardware-independent so it can be tested in the native environment (AGENTS.md, Engineering rules).
 
 ### Data flow
 
-MCP client (for example Claude Code) -> HTTP over LAN -> MCP server on the device -> message queue -> display.
-Buttons -> message queue (confirm deletes the shown message, scroll advances to the next one) -> display.
-Timer -> message queue (expired time-driven messages are removed) -> display.
+- MCP client (for example Claude Code) -> HTTP over LAN -> MCP server on the device -> message queue -> display. If the queue is full, the message is dropped, the device shows a popup, and the MCP response tells the client the queue is full.
+- Buttons -> message queue (delete, clear all, scroll) -> display.
+- Timer -> message queue (expired time-driven messages are removed) -> display.
+- Message queue <-> flash storage (persisted across reboot).
+- Wi-Fi connect (DHCP) -> welcome screen with IP, IP message added to the queue, top bar IP.
+- Internet -> NTP time and IP-based timezone -> top bar clock.
+
+### Screen layout
+
+Top bar (IP, queue depth, battery, clock) above the message area. The message area shows the title on top and the value in a large text box below. Orientation, pixel layout, and fonts are TBD.
 
 ### Planned repository layout
 
@@ -84,7 +98,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Area:** Wi-Fi, BLE
 - **Status:** Planned
 - **Added in version:** not yet implemented
-- **Description:** The device connects to the local Wi-Fi as a station. Credentials are provisioned with the Espressif ESP BLE Provisioning app and stored on the device.
+- **Description:** The device connects to the local Wi-Fi as a station and gets its IP address from DHCP. Credentials are provisioned with the Espressif ESP BLE Provisioning app and stored on the device.
 - **Source files:** TBD
 - **Behavior:** TBD: first-boot flow, what the screen shows while provisioning, reconnect behavior, how to re-provision or reset credentials.
 - **Verification:** TBD
@@ -94,9 +108,12 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Area:** Networking
 - **Status:** Planned
 - **Added in version:** not yet implemented
-- **Description:** The device hosts an MCP server on the local network. MCP is only for passing data in: clients submit messages to display. Clients such as Claude Code connect directly to the device.
+- **Description:** The device hosts an MCP server on the local network, with no authentication (D-011). MCP is only for passing data in: clients submit messages to display. Clients such as Claude Code connect directly to the device's IP address.
 - **Source files:** TBD
-- **Behavior:** TBD: MCP transport and protocol version, tool names and input schema, error responses, discovery (fixed IP / mDNS), authentication.
+- **Behavior:**
+  - A message has a title, a value, a value font size (one of two), a value color (white, blue, green, red), and a kind (time-driven or confirm-required).
+  - When the queue is full, the message is dropped and the response tells the client the queue is full, so an LLM caller knows its message was not shown.
+  - TBD: MCP transport and protocol version, tool names, field names, maximum title and value length, how a time-driven message's duration is given, how other invalid input is reported.
 - **Verification:** TBD
 
 ### F-004 - Message queue and lifecycle
@@ -106,29 +123,66 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Added in version:** not yet implemented
 - **Description:** The device owns message queuing, display order, and lifecycle. Two message kinds:
   - Time-driven: removed automatically when its time runs out.
-  - Confirm-required: stays until the user deletes it with the confirm button.
+  - Confirm-required: stays until the user deletes it with the delete button.
 - **Source files:** TBD
-- **Behavior:** TBD: queue capacity and overflow policy, ordering, whether a new message replaces an existing one (for example by id), which message is shown by default, persistence across reboot.
+- **Behavior:**
+  - Capacity: 100 messages.
+  - Full queue: new messages are dropped and existing messages are kept. The device shows a popup saying the queue is full and new messages are dropped (F-005), and the MCP response reports it (F-003).
+  - Delete (short press) removes the shown message; clear all (hold) removes every message (F-006).
+  - Messages survive reboot (stored in flash).
+  - TBD: ordering and which message is shown by default, whether a new message replaces an existing one (for example by id), storage medium (NVS or LittleFS) and write strategy, how time-driven expiry is counted across a reboot.
 - **Verification:** TBD (planned: native unit tests, see Architecture).
 
-### F-005 - Message rendering
+### F-005 - Message screen and rendering
 
 - **Area:** Display
 - **Status:** Planned
 - **Added in version:** not yet implemented
-- **Description:** Messages render in one of two font sizes and one of four text colors: white, blue, green, red. The sender chooses font size and color per message.
+- **Description:** The message screen shows the message title on top and the message value in a large text area below, under the top bar (F-007). The title has one fixed style. The value uses the font size (one of two) and color (white, blue, green, red) chosen by the sender (D-004). When the queue is full, a popup says so.
 - **Source files:** TBD
-- **Behavior:** TBD: fonts, background color, orientation, wrapping and truncation, queue position indicator. Refreshes use buffered (off-screen) rendering (AGENTS.md).
+- **Behavior:** TBD: fonts, background color, orientation, wrapping and truncation, scroll position indicator, popup text and duration, what shows when the queue is empty. Refreshes use buffered (off-screen) rendering (AGENTS.md).
 - **Verification:** TBD
 
-### F-006 - Button confirm and scroll
+### F-006 - Buttons: delete, clear all, scroll
 
 - **Area:** Input
 - **Status:** Planned
 - **Added in version:** not yet implemented
-- **Description:** One button confirms (deletes) the currently shown message. The other button scrolls through queued messages in a loop, wrapping from last to first.
+- **Description:** Button mapping (D-007):
+  - GPIO35 (delete): short press deletes the currently shown message; hold clears all messages.
+  - GPIO0 (scroll): short press shows the next queued message, wrapping from last to first.
 - **Source files:** TBD
-- **Behavior:** TBD: which physical button (GPIO0 or GPIO35) does which, whether confirm also deletes time-driven messages, whether a long press does anything.
+- **Behavior:** TBD: hold duration for clear all, whether clear all asks for confirmation, whether delete also removes time-driven messages.
+- **Verification:** TBD
+
+### F-007 - Top status bar
+
+- **Area:** Display
+- **Status:** Planned
+- **Added in version:** not yet implemented
+- **Description:** A bar across the top of the screen shows the IP address, queue depth, battery, and clock (F-008).
+- **Source files:** TBD
+- **Behavior:** TBD: layout, battery format (voltage, percent, or icon) and what shows on USB power without a battery, what shows before Wi-Fi connects and before the clock is set, update intervals.
+- **Verification:** TBD
+
+### F-008 - Clock with NTP and IP-based timezone
+
+- **Area:** Networking, time
+- **Status:** Planned
+- **Added in version:** not yet implemented
+- **Description:** The device gets the time from NTP and the timezone from a geolocation lookup of its public IP address. The clock shows in the top bar (F-007). This needs internet access, not only the LAN.
+- **Source files:** TBD
+- **Behavior:** TBD: NTP servers, geolocation service, fallback when the lookup fails, resync interval, 12 or 24 hour format.
+- **Verification:** TBD
+
+### F-009 - Welcome screen and IP message
+
+- **Area:** Display, Wi-Fi
+- **Status:** Planned
+- **Added in version:** not yet implemented
+- **Description:** After connecting, the device shows a welcome screen with its DHCP IP address and adds a message with the IP address to the queue.
+- **Source files:** TBD
+- **Behavior:** TBD: how long the welcome screen stays, the kind of the IP message (time-driven or confirm-required), what happens on reconnect or IP change, what happens if the queue is full.
 - **Verification:** TBD
 
 <!-- Template for new entries:
@@ -152,7 +206,7 @@ None planned.
 
 ### Display
 
-Built-in 1.14 inch ST7789 panel, 135 x 240 (BOARDS.md). Two font sizes, four text colors (F-005). Details TBD.
+Built-in 1.14 inch ST7789 panel, 135 x 240 (BOARDS.md). Top bar (F-007), message screen with title and value (F-005), welcome screen (F-009), queue-full popup (F-005). Two value font sizes, four value colors (D-004).
 
 ### BLE
 
@@ -160,7 +214,7 @@ Used for Wi-Fi provisioning with the ESP BLE Provisioning app (F-002). Whether B
 
 ### Wi-Fi
 
-Station mode on the local network (F-002). Credentials are never committed. They come from BLE provisioning and live on the device only. Any development-time credentials use `include/secrets.h` (gitignored) with a committed `secrets.h.example` placeholder.
+Station mode on the local network, IP from DHCP (F-002). Credentials are never committed. They come from BLE provisioning and live on the device only. Any development-time credentials use `include/secrets.h` (gitignored) with a committed `secrets.h.example` placeholder. Internet access is needed for NTP and the timezone lookup (F-008).
 
 ### UART / serial
 
@@ -170,12 +224,13 @@ Station mode on the local network (F-002). Credentials are never committed. They
 ### Storage
 
 - **NVS keys:** TBD (Wi-Fi credentials from provisioning)
+- **Message persistence:** up to 100 messages survive reboot (F-004). Medium (NVS or LittleFS) TBD.
 - **Filesystem:** TBD
 - **Partitions:** TBD
 
 ### Power
 
-TBD: USB or battery power, sleep behavior.
+Battery level shows in the top bar (F-007). TBD: USB or battery as the normal power source, sleep behavior.
 
 ### OTA
 
@@ -190,8 +245,15 @@ Record decisions that a later change could accidentally undo.
 | D-001 | The MCP server runs on the ESP32; clients connect directly to the device over the LAN. No PC-side bridge. | User decision. | 2026-09-22 |
 | D-002 | Wi-Fi credentials are provisioned with the Espressif ESP BLE Provisioning app, not hardcoded or sent over MCP. | User decision. | 2026-09-22 |
 | D-003 | MCP is only for passing message data. Display, queuing, and message lifecycle are handled on the device. | User decision. | 2026-09-22 |
-| D-004 | Text styling is limited to two font sizes and four colors: white, blue, green, red. | User decision. | 2026-09-22 |
-| D-005 | One button confirms (deletes) the shown message; the other scrolls through messages in a loop. | User decision. | 2026-09-22 |
+| D-004 | A message is a title plus a value. The sender styles the value only: two font sizes and four colors (white, blue, green, red). The title has one fixed style. | User decision. | 2026-09-22 |
+| D-005 | One button deletes the shown message; the other scrolls through messages in a loop. Mapping in D-007. | User decision. | 2026-09-22 |
+| D-006 | Framework is Arduino (arduino-esp32) under PlatformIO. | User decision. The vendor display library (TFT_eSPI) and examples are Arduino. | 2026-09-22 |
+| D-007 | GPIO35 is delete (hold = clear all); GPIO0 is scroll. | The user left the mapping open. GPIO0 is a strapping pin (BOARDS.md Q-003), so the button that gets held stays off it. | 2026-09-22 |
+| D-008 | Queue holds 100 messages. When full, new messages are dropped (existing ones kept), a popup shows, and the MCP response reports it. | User decision. | 2026-09-22 |
+| D-009 | Messages persist across reboot. | User decision. | 2026-09-22 |
+| D-010 | IP address comes from DHCP. It shows on the welcome screen, in the top bar, and as a queued message. | User decision. | 2026-09-22 |
+| D-011 | The MCP server has no password or token. Anyone on the LAN can post messages. | User decision; accepted risk. | 2026-09-22 |
+| D-012 | Time from NTP; timezone from a lookup of the device's public IP. | User decision. | 2026-09-22 |
 
 ## Verification
 
@@ -207,14 +269,11 @@ pio test -e <env>                    # on-device tests
 
 ## Open questions
 
-Known unknowns and issues found outside the current task.
+Known unknowns and issues found outside the current task. Smaller per-feature details are listed as TBD in each feature entry.
 
 - Pin header name not decided (include/pins.h or include/config.h).
-- Button mapping: which of GPIO0 / GPIO35 confirms and which scrolls. Note: GPIO0 is a strapping pin; holding it during reset enters download mode (BOARDS.md).
-- MCP details: transport and protocol version, tool names and input schema, discovery (fixed IP or mDNS), authentication on the LAN.
-- Message schema: field names for text, font size, color, kind (time-driven / confirm-required), duration; maximum text length.
-- Queue: capacity, overflow policy, ordering, replace-by-id, persistence across reboot.
-- Provisioning: BLE stack choice, re-provisioning or credential reset method, whether BLE is released after provisioning.
-- Memory budget (unverified): BLE provisioning, Wi-Fi, an HTTP MCP server, and a full-screen sprite (240 x 135 x 16 bit = 64,800 bytes) on an ESP32 without PSRAM. Check once code exists.
-- Framework and TFT_eSPI version: vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14; the installed PlatformIO platform ships a newer core (BOARDS.md Q-002).
-- Framework choice: Arduino or ESP-IDF (both supported by the PlatformIO board id).
+- MCP: transport and protocol version, tool names, field names, maximum title and value length, duration format for time-driven messages.
+- Persistence: storage medium (NVS or LittleFS) and how often it writes, to limit flash wear. How time-driven expiry is counted across a reboot, since the clock is unknown until NTP syncs.
+- Timezone: which geolocation service to use, and the fallback when it fails or there is no internet.
+- Memory budget (unverified): BLE provisioning, Wi-Fi, an HTTP MCP server, 100 stored messages, and a full-screen sprite (240 x 135 x 16 bit = 64,800 bytes) on an ESP32 without PSRAM. The maximum message length sets the queue's RAM size. Check once code exists.
+- TFT_eSPI and Arduino core versions: the vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14; the installed PlatformIO platform ships a newer core (BOARDS.md Q-002). Decide at first build.

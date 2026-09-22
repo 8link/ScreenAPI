@@ -40,6 +40,26 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Specify message format, queue, UI, and time features
+
+**Date:** 2026-09-22 21:11
+**Author:** Claude Opus 5.5
+**Type:** Documentation
+
+**Summary:**
+Recorded user decisions: Arduino framework, button mapping, title and value message format, 100-message persistent queue with drop-on-full, DHCP IP on welcome screen and in the queue, no MCP authentication, top status bar, NTP clock with IP-based timezone. Added features F-007 to F-009 and decisions D-006 to D-012. No firmware; version stays 0.0.0.
+
+**Changes:**
+- `PROJECT.md` - Scope, modules, data flow, screen layout; F-002 to F-006 updated; new F-007 (top bar), F-008 (NTP clock, IP timezone), F-009 (welcome screen, IP message); D-004 and D-005 refined, D-006 to D-012 added; open questions narrowed.
+- `BOARDS.md` - Framework set to Arduino; button roles and Q-003 workaround follow D-007.
+- `CHANGELOG.md` - This entry.
+
+**Verification:**
+- No build: no firmware exists yet.
+
+**Git commit:**
+- `docs - Specify message format, queue, UI, and time features`
+
 ## docs - Document project purpose and T-Display board
 
 **Date:** 2026-09-22 20:57
