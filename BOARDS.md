@@ -6,7 +6,7 @@ Hardware reference. Record board specifications, quirks, and usage findings when
 
 | Board | Revision | MCU | PlatformIO env | Status |
 |-------|----------|-----|----------------|--------|
-| LilyGO TTGO T-Display | TBD (see Identification) | ESP32 | `tdisplay` (board id `lilygo-t-display`) | Builds since 0.0.1; not yet verified on device |
+| LilyGO TTGO T-Display | TBD (see Identification) | ESP32 | `tdisplay` (board id `lilygo-t-display`) | Brought up with 0.0.1 (verified on device 2026-09-22) |
 
 Copy the template at the end of this file once per new board.
 
@@ -138,7 +138,19 @@ None on board.
 | UART0 | GPIO1 | GPIO3 | 115200 (factory test) | USB serial, logs, flashing |
 
 - **Framing:** 8N1 (default)
-- **Boot-time noise:** TBD
+- **Boot-time noise:** none observed at 115200. The ROM boot log is readable at the same baud rate as the firmware. Observed with 0.0.1, 2026-09-22 (power-on reset):
+
+```
+rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:1184
+load:0x40078000,len:13232
+load:0x40080400,len:3028
+entry 0x400805e4
+ScreenAPI v0.0.1
+```
 
 ### I2C / SPI / GPIO
 
@@ -155,7 +167,7 @@ None on board.
 | ID | Finding | Impact | Workaround | Verified (yes / no, date) |
 |----|---------|--------|------------|---------------------------|
 | Q-001 | The USB-UART bridge differs by revision. The 2019 schematic shows a CP2104. The PlatformIO board definition lists USB hwid 0x1A86:0x55D4 (WCH CH9102). The vendor README links both WCH and Silicon Labs drivers. | Wrong driver or no upload port on the host. | Check the chip on the unit or its USB VID:PID; install the matching driver if the OS lacks one. | no |
-| Q-002 | The vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14. The installed PlatformIO espressif32 7.0.1 ships framework-arduinoespressif32 3.20017 (arduino-esp32 2.0.17). | Possible build errors with the vendor library copy. | Use upstream TFT_eSPI 2.5.43 from the PlatformIO registry, not the vendor copy (PROJECT.md D-013). Builds with espressif32 7.0.1. | Build: yes, 2026-09-22. Display output on device: no. |
+| Q-002 | The vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14. The installed PlatformIO espressif32 7.0.1 ships framework-arduinoespressif32 3.20017 (arduino-esp32 2.0.17). | Possible build errors with the vendor library copy. | Use upstream TFT_eSPI 2.5.43 from the PlatformIO registry, not the vendor copy (PROJECT.md D-013). Builds with espressif32 7.0.1. | yes, 2026-09-22 (build and display output with 0.0.1) |
 | Q-003 | GPIO0 is BUTTON2 and a strapping pin. Held LOW during reset, the chip enters download mode. | Holding that button while powering on or resetting stops normal boot. | Do not rely on GPIO0 being held at boot. GPIO0 is used only for short presses (scroll); the hold action (clear all) is on GPIO35 (PROJECT.md D-007). | no |
 | Q-004 | Battery voltage divider on GPIO34 is enabled by ADC_EN (GPIO14). Per the factory test comment, it is on by default with USB power, but GPIO14 must be driven HIGH on battery. | Battery reads wrong when GPIO14 is not HIGH. | Drive GPIO14 HIGH before sampling GPIO34. | no |
 
@@ -176,9 +188,9 @@ None on board.
 ### On-device verification
 
 - **Flash command:** `pio run -e tdisplay -t upload`
-- **Expected boot serial output:** `ScreenAPI v<FW_VERSION>` after the ROM boot log (since 0.0.1; not yet observed)
+- **Expected boot serial output:** `ScreenAPI v<FW_VERSION>` after the ROM boot log (see UART, Boot-time noise). Observed with 0.0.1.
 - **Smoke test:** backlight on; "ScreenAPI" and the version centered in landscape, not shifted, clipped, or mirrored (F-010)
-- **Known-good firmware version:** none yet
+- **Known-good firmware version:** 0.0.1 (2026-09-22)
 
 ---
 

@@ -77,7 +77,7 @@ Details for each board live in BOARDS.md.
 
 | Board | MCU | PlatformIO env | Status | Details |
 |-------|-----|----------------|--------|---------|
-| LilyGO TTGO T-Display | ESP32 (dual-core Xtensa LX6) | `tdisplay` (board id `lilygo-t-display`) | Builds since 0.0.1; not yet verified on device | BOARDS.md "LilyGO TTGO T-Display" |
+| LilyGO TTGO T-Display | ESP32 (dual-core Xtensa LX6) | `tdisplay` (board id `lilygo-t-display`) | Brought up with 0.0.1 (verified on device 2026-09-22) | BOARDS.md "LilyGO TTGO T-Display" |
 
 ## Feature log
 
@@ -188,12 +188,12 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-010 - Boot screen with firmware version
 
 - **Area:** Display
-- **Status:** In progress (builds; not verified on device)
+- **Status:** Done
 - **Added in version:** 0.0.1
 - **Description:** First firmware. Brings up the toolchain, display driver, and board: prints the firmware version on serial and shows it on screen.
 - **Source files:** `src/main.cpp`, `include/pins.h`, `include/tft_setup.h`, `platformio.ini`
 - **Behavior:** On boot, prints `ScreenAPI v<FW_VERSION>` on serial at 115200 baud. The screen, in landscape (rotation 1), shows "ScreenAPI" (font 4) and "v<FW_VERSION>" (font 2) centered, white on black, with the backlight on. The loop idles.
-- **Verification:** `pio run -e tdisplay` succeeds. On device (not yet done): serial shows `ScreenAPI v0.0.1` after the ROM boot log; both lines are centered, not shifted, clipped, or mirrored.
+- **Verification:** `pio run -e tdisplay` succeeds. On device, 2026-09-22 (reported by the user): serial shows `ScreenAPI v0.0.1` after the ROM boot log (BOARDS.md, On-device verification); the screen works.
 
 <!-- Template for new entries:
 

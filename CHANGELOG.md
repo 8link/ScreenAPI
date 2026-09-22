@@ -40,6 +40,26 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Record 0.0.1 on-device verification
+
+**Date:** 2026-09-22 21:23
+**Author:** Claude Opus 5.5
+**Type:** Documentation
+
+**Summary:**
+The user flashed 0.0.1 on the T-Display and confirmed it works. F-010 marked Done; 0.0.1 recorded as known-good; boot serial log and Q-002 verification recorded.
+
+**Changes:**
+- `PROJECT.md` - F-010 status Done with on-device verification; board status.
+- `BOARDS.md` - Board status, Q-002 verified, boot serial log, known-good firmware 0.0.1.
+- `CHANGELOG.md` - This entry.
+
+**Verification:**
+- No build: documentation only. Device output reported by the user.
+
+**Git commit:**
+- `docs - Record 0.0.1 on-device verification`
+
 ## 0.0.1 - Add PlatformIO project and boot screen
 
 **Date:** 2026-09-22 21:18
