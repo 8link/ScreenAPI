@@ -1,0 +1,10 @@
+.pio/
+.vscode/.browse*
+.vscode/ipch
+*.log
+include/secrets.h
+secrets.ini
+*.pem
+*.key
+captures/
+dumps/
