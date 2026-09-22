@@ -40,6 +40,26 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Document project purpose and T-Display board
+
+**Date:** 2026-09-22 20:57
+**Author:** Claude Opus 5.5
+**Type:** Documentation
+
+**Summary:**
+Recorded the project purpose (desk display with an on-device MCP server), planned features F-002 to F-006, design decisions D-001 to D-005, and the LilyGO TTGO T-Display as first target board with quirks Q-001 to Q-004. No firmware; version stays 0.0.0.
+
+**Changes:**
+- `PROJECT.md` - Purpose and scope, planned modules and data flow, supported board, features F-002 to F-006, design decisions, open questions.
+- `BOARDS.md` - LilyGO TTGO T-Display section from vendor README, schematic, TFT_eSPI setup, factory test, and PlatformIO board definition; quirks Q-001 to Q-004.
+- `CHANGELOG.md` - This entry.
+
+**Verification:**
+- No build: no firmware exists yet. Board data comes from vendor documentation and is not verified on the unit.
+
+**Git commit:**
+- `docs - Document project purpose and T-Display board`
+
 ## docs - Add project documentation scaffold
 
 **Date:** 2026-09-22 20:20
