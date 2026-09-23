@@ -1,6 +1,7 @@
 #include "screen.h"
 
 #include <TFT_eSPI.h>
+#include <countdown.h>
 #include <scroll_offset.h>
 #include <string.h>
 #include <text_wrap.h>
@@ -19,6 +20,8 @@ constexpr int kTitleHeight = 16;
 constexpr int kValueTop = 41;
 constexpr int kValueHeight = kHeight - kValueTop;
 constexpr int kTextWidth = kWidth - 2 * kMargin;
+constexpr int kCountdownHeight = 20;
+constexpr int kCountdownPadding = 5;
 
 constexpr uint8_t kBarFont = 2;
 constexpr uint8_t kTitleFont = 2;
@@ -55,6 +58,7 @@ Shown shown;
 ui::Line lines[kMaxLines];
 char lineBuffer[mq::kValueMaxLen + 1];
 uint64_t lastFrameMs = 0;
+int32_t lastCountdownS = -1;  // -1: no countdown on screen
 
 uint8_t fontFor(mq::FontSize size)
 {
@@ -133,6 +137,29 @@ void drawValue(const mq::Message& message, uint64_t elapsedMs)
     }
 }
 
+int32_t countdownFor(const mq::Message* message)
+{
+    if (message == nullptr || message->kind != mq::Kind::Timed) {
+        return -1;
+    }
+    return static_cast<int32_t>(ui::countdownSeconds(message->remainingMs));
+}
+
+// Small box at the bottom left of the value area, drawn over the value text.
+void drawCountdown(uint32_t seconds)
+{
+    char text[12];
+    ui::formatCountdown(seconds, text, sizeof(text));
+    const int width = frame.textWidth(text, kSmallFont) + 2 * kCountdownPadding;
+    const int x = 2;
+    const int y = kHeight - kCountdownHeight - 2;
+    frame.fillRoundRect(x, y, width, kCountdownHeight, 3, TFT_BLACK);
+    frame.drawRoundRect(x, y, width, kCountdownHeight, 3, TFT_DARKGREY);
+    frame.setTextDatum(MC_DATUM);
+    frame.setTextColor(TFT_LIGHTGREY);
+    frame.drawString(text, x + width / 2, y + kCountdownHeight / 2, kSmallFont);
+}
+
 void drawEmpty()
 {
     frame.setTextDatum(MC_DATUM);
@@ -166,11 +193,14 @@ void drawTitle(uint64_t elapsedMs)
     frame.drawFastHLine(0, kValueTop - 2, kWidth, TFT_DARKGREY);
 }
 
-void render(const mq::MessageQueue& queue, const mq::Message* message, uint64_t nowMs)
+void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t countdownS, uint64_t nowMs)
 {
     frame.fillSprite(TFT_BLACK);
     if (message != nullptr) {
         drawValue(*message, nowMs - shown.sinceMs);
+        if (countdownS >= 0) {
+            drawCountdown(static_cast<uint32_t>(countdownS));
+        }
     } else {
         drawEmpty();
     }
@@ -216,12 +246,14 @@ void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged)
         }
     }
 
+    const int32_t countdownS = countdownFor(message);
     const bool frameDue = isScrolling() && nowMs - lastFrameMs >= kFrameMs;
-    if (!queueChanged && !relayout && !frameDue) {
+    if (!queueChanged && !relayout && !frameDue && countdownS == lastCountdownS) {
         return;
     }
-    render(queue, message, nowMs);
+    render(queue, message, countdownS, nowMs);
     lastFrameMs = nowMs;
+    lastCountdownS = countdownS;
 }
 
 }  // namespace screen

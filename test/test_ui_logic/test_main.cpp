@@ -1,4 +1,5 @@
 #include <button_tracker.h>
+#include <countdown.h>
 #include <scroll_offset.h>
 #include <string.h>
 #include <text_wrap.h>
@@ -158,6 +159,34 @@ static void test_button_works_again_after_long_press()
     TEST_ASSERT_EQUAL(ButtonEvent::Short, button.update(false, 3130));
 }
 
+static void test_countdown_seconds_round_up()
+{
+    TEST_ASSERT_EQUAL_UINT32(0, countdownSeconds(0));
+    TEST_ASSERT_EQUAL_UINT32(1, countdownSeconds(1));
+    TEST_ASSERT_EQUAL_UINT32(1, countdownSeconds(1000));
+    TEST_ASSERT_EQUAL_UINT32(2, countdownSeconds(1001));
+    TEST_ASSERT_EQUAL_UINT32(86400, countdownSeconds(86400000));
+}
+
+static void test_countdown_format()
+{
+    char text[16];
+    formatCountdown(0, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("0s", text);
+    formatCountdown(59, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("59s", text);
+    formatCountdown(60, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("1:00", text);
+    formatCountdown(245, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("4:05", text);
+    formatCountdown(3599, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("59:59", text);
+    formatCountdown(3723, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("1:02:03", text);
+    formatCountdown(86400, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("24:00:00", text);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -175,5 +204,7 @@ int main()
     RUN_TEST(test_button_ignores_bounce);
     RUN_TEST(test_button_long_press_fires_once_while_held);
     RUN_TEST(test_button_works_again_after_long_press);
+    RUN_TEST(test_countdown_seconds_round_up);
+    RUN_TEST(test_countdown_format);
     return UNITY_END();
 }

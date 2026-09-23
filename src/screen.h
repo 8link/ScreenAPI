@@ -12,7 +12,7 @@ bool begin();
 
 void showBootScreen();
 
-// Redraws when the queue changed or text is scrolling. Call every loop.
+// Redraws when the queue changed, text is scrolling, or the countdown changed. Call every loop.
 void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged);
 
 }  // namespace screen

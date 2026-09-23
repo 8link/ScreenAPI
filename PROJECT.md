@@ -133,21 +133,21 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Status:** In progress (queue logic in 0.0.2, used by the firmware since 0.0.3; persistence pending)
 - **Added in version:** 0.0.2
 - **Description:** The device owns message queuing, display order, and lifecycle. Two message kinds:
-  - Time-driven: removed automatically when its time runs out.
+  - Time-driven: removed automatically when its time on screen runs out (D-020).
   - Confirm-required: stays until the user deletes it with the delete button.
 - **Source files:** `lib/message_queue/src/message_queue.h`, `lib/message_queue/src/message_queue.cpp`, `test/test_message_queue/test_main.cpp`
 - **Behavior:**
-  - Capacity: 30 messages (D-008). Fixed slots, no heap: 616 bytes per message, 18,488 bytes for the whole queue on the ESP32 (measured with the xtensa toolchain, 0.0.3).
+  - Capacity: 30 messages (D-008). Fixed slots, no heap: 608 bytes per message, 18,264 bytes for the whole queue on the ESP32 (measured with the xtensa toolchain, 0.0.4).
   - Validation (D-016): value required; id up to 16, title up to 64, value up to 512 characters; valid font size, color, and kind; time-driven duration 1 to 86400 seconds. Invalid input is rejected, not truncated. Confirm-required messages ignore the duration.
   - Order (D-014): newest first. Adding a message moves the cursor (the shown message) to it.
   - Replace by id (D-015): a message with the same non-empty id as a queued one replaces it and moves to the front. Replacing works even when the queue is full.
   - Full queue: new messages without a matching id are dropped and existing messages are kept. The device shows a popup (F-005) and the MCP response reports it (F-003).
   - Scroll: shows the next older message, wrapping from the oldest to the newest.
   - Delete: removes the shown message of either kind, then shows the next older one (wrapping to the newest). Clear all removes every message (F-006).
-  - Expiry: time-driven messages are removed once the current time reaches added time + duration. When other messages are removed, the cursor stays on the message being shown.
-  - Time is passed in by the caller in milliseconds as a 64-bit value. The firmware must use a 64-bit uptime clock, not the 32-bit `millis()`, which wraps after about 49.7 days.
+  - Countdown (D-020): a time-driven message keeps its remaining time and counts down only while it is the shown message. `tick(now)` charges the time since the previous tick to the shown message and removes it when its time runs out; the next older message is then shown. Messages not on screen keep their remaining time. Replacing a message by id starts the new duration. When other messages are removed, the cursor stays on the message being shown.
+  - Time is passed to `tick()` in milliseconds as a 64-bit value; the first call only sets the starting point, so time before the first tick (boot) is not counted. The firmware must use a 64-bit uptime clock, not the 32-bit `millis()`, which wraps after about 49.7 days.
   - Persistence (D-009, D-017), planned: messages survive reboot; time-driven messages restart their full duration after a reboot. Storage medium and write strategy TBD.
-- **Verification:** `pio test -e native`: 18 unit tests covering validation, limits, order, scroll, full queue, replace by id, delete, clear, and expiry with cursor handling.
+- **Verification:** `pio test -e native`: 22 unit tests covering validation, limits, order, scroll, full queue, replace by id, delete, clear, and the shown-only countdown with expiry. On device (0.0.4, 2026-09-23): with the user scrolling away and back, the 30 s message expired after exactly 30 s of time on screen (serial log, within 20 ms).
 
 ### F-005 - Message screen and rendering
 
@@ -155,13 +155,14 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Status:** In progress (message screen in 0.0.3; queue-full popup pending with F-003)
 - **Added in version:** 0.0.3
 - **Description:** The message screen shows the message title on top and the message value in a large text area below, under the top bar (F-007). The title has one fixed style. The value uses the font size (one of two) and color (white, blue, green, red) chosen by the sender (D-004). Long text scrolls automatically (D-018). When the queue is full, a popup says so.
-- **Source files:** `src/screen.cpp`, `src/screen.h`, `lib/ui_logic/src/text_wrap.*`, `lib/ui_logic/src/scroll_offset.*`
+- **Source files:** `src/screen.cpp`, `src/screen.h`, `lib/ui_logic/src/text_wrap.*`, `lib/ui_logic/src/scroll_offset.*`, `lib/ui_logic/src/countdown.*`
 - **Behavior:**
   - Layout: see Architecture, Screen layout.
   - Fonts: small = TFT_eSPI font 2 (16 px line height), large = font 4 (26 px). Title: font 2, light grey.
   - Colors: white, blue (0x4C9F, lighter than TFT_BLUE for readability on black), green, red.
   - Word wrap at spaces; a word wider than the line is broken; `\n` starts a new line.
   - Auto-scroll (D-018): a title wider than 232 px scrolls horizontally at 40 px/s; a value taller than 94 px scrolls vertically at 20 px/s. Each pauses 1.5 s at the start, moves to the end, pauses 1.5 s, then jumps back. Scrolling restarts only when the shown text or font changes.
+  - Countdown box (D-020): a time-driven message shows its remaining time in a small bordered box at the bottom left of the value area, over the value text: `45s`, `4:05`, or `1:02:03`, rounded up so it never shows 0. Font 2, light grey on black, dark grey border. The screen redraws when the shown number changes.
   - Empty queue: "No messages" centered in the value area.
   - Rendering (D-019): each frame is drawn into one full-screen 8-bit sprite and pushed at once. Redraws happen on queue changes and every 33 ms only while something scrolls.
   - TBD: queue-full popup text and duration (with F-003), handling of non-ASCII characters.
@@ -230,8 +231,8 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Added in version:** 0.0.3
 - **Description:** Five sample messages added at boot so the message screen, scrolling, buttons, and expiry can be tried before MCP exists.
 - **Source files:** `src/main.cpp` (`addDemoMessages`)
-- **Behavior:** Shown first: a confirm message with a title and value long enough to scroll both ways. Then: a blue small-font confirm message; a green large-font message that expires after 30 s; a red large-font confirm message long enough to scroll; a white message that expires after 60 s. Serial prints `Queue: 5 messages` and the free heap after boot.
-- **Verification:** On device, 2026-09-22: serial shows `Queue: 5 messages` at 2.3 s and `Timed message expired` at 32.3 s and 62.3 s after reset.
+- **Behavior:** Since 0.0.4 shown first: a green large-font message with 30 s on screen. Then: a confirm message with a title and value long enough to scroll both ways; a blue small-font confirm message; a red large-font confirm message long enough to scroll; a white message with 60 s on screen. Serial prints `Queue: 5 messages` and the free heap after boot.
+- **Verification:** On device, 2026-09-23 (0.0.4): serial shows `Queue: 5 messages` at 2.3 s; the green message expired after 30 s of time on screen.
 
 <!-- Template for new entries:
 
@@ -309,6 +310,7 @@ Record decisions that a later change could accidentally undo.
 | D-017 | After a reboot, time-driven messages restart their full duration. | User decision. Needs no clock and no extra flash writes. | 2026-09-22 |
 | D-018 | Long text scrolls automatically: the title horizontally, the value vertically. | User decision. Both buttons are already used (D-005), so scrolling needs no input. | 2026-09-22 |
 | D-019 | The screen is drawn into one full-screen 8-bit sprite (240 x 135, 32,400 bytes) and pushed at once. | Flicker-free redraws (AGENTS.md). 8-bit halves the RAM of a 16-bit buffer, and the four text colors and greys survive the reduction. | 2026-09-22 |
+| D-020 | A time-driven message counts down only while it is on screen. Its remaining time shows in a small box at the bottom left. | User decision. | 2026-09-23 |
 
 ## Verification
 

@@ -41,7 +41,7 @@ bool isValid(const NewMessage& input)
 
 }  // namespace
 
-AddResult MessageQueue::add(const NewMessage& input, uint64_t nowMs)
+AddResult MessageQueue::add(const NewMessage& input)
 {
     if (!isValid(input)) {
         return AddResult::Invalid;
@@ -64,7 +64,7 @@ AddResult MessageQueue::add(const NewMessage& input, uint64_t nowMs)
     message.color = input.color;
     message.kind = input.kind;
     message.durationS = input.kind == Kind::Timed ? input.durationS : 0;
-    message.expiresAtMs = input.kind == Kind::Timed ? nowMs + input.durationS * 1000ULL : 0;
+    message.remainingMs = input.kind == Kind::Timed ? input.durationS * 1000 : 0;
     count_++;
     cursor_ = 0;  // newest first, jump to it
 
@@ -98,17 +98,22 @@ void MessageQueue::clear()
     cursor_ = 0;
 }
 
-bool MessageQueue::expire(uint64_t nowMs)
+bool MessageQueue::tick(uint64_t nowMs)
 {
-    bool removed = false;
-    for (size_t i = count_; i > 0; i--) {
-        const Message& message = items_[i - 1];
-        if (message.kind == Kind::Timed && nowMs >= message.expiresAtMs) {
-            removeAt(i - 1);
-            removed = true;
-        }
+    const uint64_t elapsedMs = ticking_ ? nowMs - lastTickMs_ : 0;
+    ticking_ = true;
+    lastTickMs_ = nowMs;
+
+    if (empty() || items_[cursor_].kind != Kind::Timed) {
+        return false;
     }
-    return removed;
+    Message& message = items_[cursor_];
+    if (elapsedMs < message.remainingMs) {
+        message.remainingMs -= static_cast<uint32_t>(elapsedMs);
+        return false;
+    }
+    removeAt(cursor_);
+    return true;
 }
 
 void MessageQueue::removeAt(size_t index)

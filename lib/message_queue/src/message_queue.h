@@ -39,13 +39,13 @@ struct Message {
     Color color;
     Kind kind;
     uint32_t durationS;
-    uint64_t expiresAtMs;  // Timed only
+    uint32_t remainingMs;  // Timed only; counts down only while the message is shown
 };
 
 // Index 0 is the newest message. The cursor is the message on screen.
 class MessageQueue {
 public:
-    AddResult add(const NewMessage& input, uint64_t nowMs);
+    AddResult add(const NewMessage& input);
 
     size_t size() const { return count_; }
     bool empty() const { return count_ == 0; }
@@ -61,8 +61,10 @@ public:
     // Removes the shown message. Returns false when the queue is empty.
     bool deleteCurrent();
     void clear();
-    // Removes timed messages whose time has run out. Returns true if any were removed.
-    bool expire(uint64_t nowMs);
+    // Counts down the shown message by the time since the previous tick, if it
+    // is timed, and removes it when its time runs out. The first call only sets
+    // the starting point. Returns true if a message was removed.
+    bool tick(uint64_t nowMs);
 
 private:
     void removeAt(size_t index);
@@ -71,6 +73,8 @@ private:
     Message items_[kCapacity];
     size_t count_ = 0;
     size_t cursor_ = 0;
+    bool ticking_ = false;
+    uint64_t lastTickMs_ = 0;
 };
 
 }  // namespace mq

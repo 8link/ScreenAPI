@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.3
+**Current firmware version:** 0.0.4
 
 ## Format
 
@@ -39,6 +39,34 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.4 - Count down timed messages only while shown
+
+**Date:** 2026-09-23 16:35
+**Author:** Claude Opus 5.5
+**Type:** Core logic, display
+
+**Summary:**
+A time-driven message now counts down only while it is on screen, and its remaining time shows in a small box at the bottom left (D-020, F-004, F-005). The demo shows the 30 s message first (F-011).
+
+**Changes:**
+- `lib/message_queue/src/message_queue.h`, `.cpp` - `remainingMs` replaces `expiresAtMs`; `tick(now)` replaces `expire(now)` and counts down only the shown message; `add()` no longer takes the time.
+- `lib/ui_logic/src/countdown.h`, `.cpp` - New. Seconds rounded up; `45s`, `4:05`, `1:02:03` format.
+- `src/screen.cpp`, `src/screen.h` - Countdown box; redraw when the shown number changes.
+- `src/main.cpp` - `tick()` before button handling; demo order and texts.
+- `test/test_message_queue/test_main.cpp` - Expiry tests replaced by 7 countdown tests (22 total).
+- `test/test_ui_logic/test_main.cpp` - 2 countdown format tests (16 total).
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.4`.
+- `PROJECT.md` - F-004, F-005, F-011 behavior; D-020; queue size.
+
+**Verification:**
+- `pio test -e native`: 38 of 38 tests passed.
+- `pio run -e tdisplay` succeeded: RAM 43,564 bytes (13.3%) static, flash 312,109 bytes (23.8%). No new warnings.
+- On device: the user scrolled away from the 30 s message after 13.96 s and back 12.54 s later; it expired 16.06 s after returning, 30.02 s of time on screen in total (serial log). The 60 s message, shown for 5.3 s, did not expire.
+- Not yet checked by eye: the countdown box.
+
+**Git commit:**
+- `v0.0.4 - Count down timed messages only while shown`
 
 ## docs - Record 0.0.3 on-device verification
 

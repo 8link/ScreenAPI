@@ -24,16 +24,15 @@ uint64_t nowMs()
 
 // Temporary sample messages until messages arrive over MCP (PROJECT.md F-011).
 // The last one added is shown first.
-void addDemoMessages(uint64_t now)
+void addDemoMessages()
 {
     const mq::NewMessage demos[] = {
-        {"demo-timer", "Timer", "This message expires 60 seconds after boot.", mq::FontSize::Small, mq::Color::White,
-         mq::Kind::Timed, 60},
+        {"demo-timer", "Timer",
+         "Timed message: it counts down only while it is on screen. The box at the bottom left shows the time left.",
+         mq::FontSize::Small, mq::Color::White, mq::Kind::Timed, 60},
         {"demo-error", "Upload failed",
          "Serial port not found. Check the USB cable and the USB-UART driver, then run the upload again.",
          mq::FontSize::Large, mq::Color::Red, mq::Kind::Confirm, 0},
-        {"demo-tests", "Tests", "32 of 32 passed. Expires after 30 seconds.", mq::FontSize::Large,
-         mq::Color::Green, mq::Kind::Timed, 30},
         {"demo-info", "Info", "Short message in blue, small font.", mq::FontSize::Small, mq::Color::Blue,
          mq::Kind::Confirm, 0},
         {"demo-long", "Claude Code - ScreenAPI - working on message screen and buttons",
@@ -43,9 +42,11 @@ void addDemoMessages(uint64_t now)
          "message, hold it for 1.5 seconds to clear all messages, and press the scroll button to show the "
          "next message.",
          mq::FontSize::Small, mq::Color::White, mq::Kind::Confirm, 0},
+        {"demo-tests", "Tests", "38 of 38 passed. Expires after 30 seconds on screen.", mq::FontSize::Large,
+         mq::Color::Green, mq::Kind::Timed, 30},
     };
     for (const mq::NewMessage& demo : demos) {
-        if (queue.add(demo, now) != mq::AddResult::Added) {
+        if (queue.add(demo) != mq::AddResult::Added) {
             Serial.printf("Demo message rejected: %s\n", demo.id);
         }
     }
@@ -100,7 +101,7 @@ void setup()
     screen::showBootScreen();
     delay(kBootScreenMs);
 
-    addDemoMessages(nowMs());
+    addDemoMessages();
     Serial.printf("Queue: %u messages\n", static_cast<unsigned>(queue.size()));
     Serial.printf("Free heap: %u bytes, largest block: %u bytes\n", static_cast<unsigned>(ESP.getFreeHeap()),
                   static_cast<unsigned>(ESP.getMaxAllocHeap()));
@@ -110,11 +111,12 @@ void setup()
 void loop()
 {
     const uint64_t now = nowMs();
-    bool changed = handleButtons(now);
-    if (queue.expire(now)) {
-        changed = true;
+    // Tick before handling buttons, so time already spent is charged to the message that was on screen.
+    bool changed = queue.tick(now);
+    if (changed) {
         Serial.printf("Timed message expired, %u left\n", static_cast<unsigned>(queue.size()));
     }
+    changed |= handleButtons(now);
     screen::update(queue, now, changed);
     delay(5);
 }
