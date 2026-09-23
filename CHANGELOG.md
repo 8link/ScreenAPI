@@ -40,6 +40,8 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Fix stale verification note in BOARDS.md
+
 ## 0.0.4 - Count down timed messages only while shown
 
 **Date:** 2026-09-23 16:35

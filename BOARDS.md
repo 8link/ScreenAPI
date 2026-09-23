@@ -14,7 +14,7 @@ Copy the template at the end of this file once per new board.
 
 ## LilyGO TTGO T-Display
 
-Sources: vendor repository https://github.com/Xinyuan-LilyGO/TTGO-T-Display (read at commit 6f89cdd, 2025-02-20): README, schematic `ESP32-TFT(6-26).pdf` dated 2019-06-26, `TFT_eSPI/User_Setups/Setup25_TTGO_T_Display.h`, `TFT_eSPI/examples/FactoryTest/FactoryTest.ino`. Also PlatformIO board definition `lilygo-t-display.json` (platform espressif32 7.0.1). Nothing below has been verified on the physical unit yet.
+Sources: vendor repository https://github.com/Xinyuan-LilyGO/TTGO-T-Display (read at commit 6f89cdd, 2025-02-20): README, schematic `ESP32-TFT(6-26).pdf` dated 2019-06-26, `TFT_eSPI/User_Setups/Setup25_TTGO_T_Display.h`, `TFT_eSPI/examples/FactoryTest/FactoryTest.ino`. Also PlatformIO board definition `lilygo-t-display.json` (platform espressif32 7.0.1). Values come from these sources unless marked as observed or verified on the unit in hand (a T-Display with ESP32-D0WDQ6 and CP2104, used since 2026-09-22).
 
 ### Identification
 
