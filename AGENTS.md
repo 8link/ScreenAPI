@@ -84,3 +84,14 @@ After committing:
 - Comment non-obvious hardware interactions with the reason, not only the action.
 - Bugs or suspicious behavior found outside the current task: report them or add them to PROJECT.md Open questions. Do not silently fix or ignore them.
 - Use buffered (off-screen) rendering for display refreshes where the driver allows it, to avoid visible flicker.
+
+## Status messages on the desk display
+
+Report task progress on the ScreenAPI display through its MCP tool `show_message` (server `screen`, `http://screenapi.local/mcp`).
+
+- Task start: a timed message, `duration_s` 10, saying what the task is.
+- Each major step: a timed message, `duration_s` 10.
+- Task end: a confirm message (no `duration_s`, `kind` confirm), so it stays until the user deletes it. Green when the task succeeded, red when it failed or is blocked.
+- Use one `id` per task (for example `job-<topic>`, at most 16 characters) for the start, step, and end messages, so each replaces the previous one.
+- Keep titles and values short and ASCII.
+- If the `screen` tool is not loaded in the session, send the same JSON-RPC `tools/call` with curl (PROJECT.md Verification). If the display cannot be reached, continue the task and say so in the report.

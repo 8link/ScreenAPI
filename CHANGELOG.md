@@ -40,6 +40,8 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Add rule for task status messages on the display
+
 ## 0.0.13 - Add clock with NTP and IP-based timezone
 
 **Date:** 2026-09-23 18:59
