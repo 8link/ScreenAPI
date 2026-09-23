@@ -40,6 +40,8 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Record Claude Code connection to the MCP server
+
 ## 0.0.10 - Remove demo messages
 
 **Date:** 2026-09-23 17:56

@@ -124,7 +124,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-003 - MCP server on device
 
 - **Area:** Networking
-- **Status:** In progress (implemented in 0.0.8; verified over the LAN with raw HTTP requests, not yet with Claude Code)
+- **Status:** In progress (implemented in 0.0.8; verified over the LAN with raw HTTP requests and a Claude Code connection check; no tool call from Claude Code yet)
 - **Added in version:** 0.0.8
 - **Description:** The device hosts an MCP server on the local network, with no authentication (D-011). MCP is only for passing data in: clients submit messages to display. Clients such as Claude Code connect directly to the device (D-001, D-025).
 - **Source files:** `src/mcp_server.*`, `lib/mcp_protocol/src/mcp_handler.*`, `lib/mcp_protocol/src/text_clean.*`, `test/test_mcp_protocol/test_main.cpp`
@@ -140,8 +140,8 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Text cleanup (D-026): title, value, and id are converted to what the ASCII fonts can draw before the limits are checked. The result reports how many characters became '?'.
   - Origin check: a request with an `Origin` header other than `http://<device-ip>` or `http://screenapi.local` gets 403, so web pages cannot post to the device (DNS rebinding protection required by the MCP spec). Claude Code sends no Origin.
   - Serial: `MCP: <method or tool>: <result>` per request.
-  - Connect Claude Code: `claude mcp add --transport http screen http://screenapi.local/mcp` (or the IP address).
-- **Verification:** `pio test -e native`: 16 tests in `test_mcp_protocol` (initialize and version negotiation, notifications, ping, tools/list, protocol errors, all show_message fields and defaults, replace by id, validation errors, cleanup and limits, full queue, queue_status, text cleanup). On device, 2026-09-23 (0.0.8), from a machine on the same LAN: initialize 175 ms, show_message 78 ms, tools/list, queue_status, validation error, GET 405, foreign Origin 403; mDNS query for `screenapi.local` answered with 192.168.10.122. Not yet: a session from Claude Code itself; the full-queue path on the device.
+  - Connect Claude Code: `claude mcp add --transport http screen http://screenapi.local/mcp` (or the IP address). On Linux, `.local` names need an mDNS resolver: `apt-get install avahi-daemon libnss-mdns` (adds `mdns4_minimal` to the `hosts` line in `/etc/nsswitch.conf`). macOS and Windows resolve `.local` without extra setup.
+- **Verification:** `pio test -e native`: 16 tests in `test_mcp_protocol` (initialize and version negotiation, notifications, ping, tools/list, protocol errors, all show_message fields and defaults, replace by id, validation errors, cleanup and limits, full queue, queue_status, text cleanup). On device, 2026-09-23 (0.0.8), from a machine on the same LAN: initialize 175 ms, show_message 78 ms, tools/list, queue_status, validation error, GET 405, foreign Origin 403; mDNS query for `screenapi.local` answered with 192.168.10.122. Claude Code 2.1.280 on the development machine (Debian 13, after installing avahi-daemon and libnss-mdns), 2026-09-23: `claude mcp list` reports `screen: http://screenapi.local/mcp (HTTP) - Connected`. Not yet: a tool call from a Claude Code session; the full-queue path on the device.
 
 ### F-004 - Message queue and lifecycle
 
