@@ -1,6 +1,5 @@
 #include "screen.h"
 
-#include <TFT_eSPI.h>
 #include <countdown.h>
 #include <markup.h>
 #include <qrcode.h>
@@ -9,30 +8,22 @@
 #include <text_wrap.h>
 
 #include "board.h"
+#include "display.h"
 
 namespace screen {
 
 namespace {
 
-// Layout: top bar, title row, value area. Positions derive from the board's
-// screen size; the fixed rows above the value area need at least 135 px height.
+// Layout: top bar, title row, value area. Widths derive from the board's screen
+// size, row heights from the board's fonts (computed in begin()).
 constexpr int kWidth = board::kScreenWidth;
 constexpr int kHeight = board::kScreenHeight;
 static_assert(kWidth >= 240 && kHeight >= 135, "layout needs at least 240 x 135");
 constexpr int kMargin = 4;
-constexpr int kBarHeight = 20;
-constexpr int kTitleTop = 23;
-constexpr int kTitleHeight = 16;
-constexpr int kValueTop = 43;
-constexpr int kValueHeight = kHeight - kValueTop;
 constexpr int kTextWidth = kWidth - 2 * kMargin;
-constexpr int kCountdownHeight = 20;
 constexpr int kCountdownPadding = 5;
-
-constexpr uint8_t kBarFont = 2;
-constexpr uint8_t kTitleFont = 2;
-constexpr uint8_t kSmallFont = 2;
-constexpr uint8_t kLargeFont = 4;
+constexpr int kPillGap = 3;
+constexpr int kPillPadding = 4;
 
 constexpr uint32_t kTitleSpeedPxPerS = 40;
 constexpr uint32_t kValueSpeedPxPerS = 20;
@@ -40,16 +31,15 @@ constexpr uint32_t kScrollPauseMs = 1500;
 constexpr uint32_t kFrameMs = 33;
 constexpr uint32_t kPopupMs = 3000;
 
-constexpr uint16_t kBlue = 0x4C9F;  // lighter than TFT_BLUE, which is hard to read on black
+constexpr uint16_t kBlack = 0x0000;
+constexpr uint16_t kWhite = 0xFFFF;
+constexpr uint16_t kDarkGrey = 0x7BEF;
+constexpr uint16_t kBlue = 0x4C9F;  // lighter than pure blue, which is hard to read on black
 
-// Top bar colors (D-028), chosen to survive the 8-bit frame buffer unchanged:
-// each is the exact RGB565 form of an RGB332 color.
+// Top bar colors (D-028).
 constexpr uint16_t kBarBackground = 0x210A;  // dark slate (36, 36, 85)
 constexpr uint16_t kPillBackground = 0x420A;  // slate grey (73, 73, 85)
 constexpr uint16_t kQueueAccent = 0xDC80;     // amber (219, 146, 0)
-constexpr int kPillHeight = 18;
-constexpr int kPillGap = 3;
-constexpr int kPillPadding = 4;
 
 // Markup tag names in mq::Color order (D-021).
 const char* const kColorNames[] = {"white", "blue", "green", "red"};
@@ -60,16 +50,39 @@ static_assert(static_cast<int>(mq::Color::White) == 0 && static_cast<int>(mq::Co
 // Worst case: every character of the value is '\n'.
 constexpr size_t kMaxLines = mq::kValueMaxLen + 1;
 
-TFT_eSPI tft;
-TFT_eSprite frame(&tft);
+enum FontId { kBarFont, kTitleFont, kSmallFont, kLargeFont, kFontCount };
+
+struct FontMetrics {
+    const uint8_t* data;
+    int ascent;      // top of the tallest glyph above the cursor line
+    int capHeight;   // height of 'H', for vertical centering
+    int lineHeight;  // distance between wrapped lines
+    int xRight;      // right edge of "X", used to measure advances
+};
+
+struct Layout {
+    int pillHeight;
+    int barHeight;
+    int titleTop;
+    int valueTop;
+    int valueHeight;
+    int countdownHeight;
+};
+
+enum class Align { Left, Center, Right };
+
+Arduino_GFX* display = nullptr;
+Arduino_Canvas_Indexed* canvas = nullptr;
+FontMetrics fonts[kFontCount];
+Layout layoutRows;
 
 // Layout of the message on screen; rebuilt only when its text, font, or color
 // changes, so scrolling does not restart when other messages change.
 struct Shown {
     bool valid;
     char title[mq::kTitleMaxLen + 1];
-    char value[mq::kValueMaxLen + 1];  // as received, with markup
-    char text[mq::kValueMaxLen + 1];   // visible text, markup removed
+    char value[mq::kValueMaxLen + 1];      // as received, with markup
+    char text[mq::kValueMaxLen + 1];       // visible text, markup removed
     uint8_t colors[mq::kValueMaxLen + 1];  // mq::Color per visible character
     mq::FontSize fontSize;
     mq::Color color;
@@ -81,7 +94,7 @@ struct Shown {
 
 Shown shown;
 ui::Line lines[kMaxLines];
-char lineBuffer[mq::kValueMaxLen + 1];
+char lineBuffer[mq::kValueMaxLen + 2];  // one extra for the measuring 'X'
 uint64_t lastFrameMs = 0;
 int32_t lastCountdownS = -1;  // -1: no countdown on screen
 StatusBar lastBar;
@@ -94,7 +107,92 @@ constexpr int kQrMaxModules = 37;  // version 5; the provisioning payload needs 
 bool qrModules[kQrMaxModules * kQrMaxModules];
 int qrSize = 0;
 
-uint8_t fontFor(mq::FontSize size)
+int smaller(int a, int b)
+{
+    return a < b ? a : b;
+}
+
+// Right edge of the text's bounding box when drawn from x = 0.
+int boundsRight(const char* text)
+{
+    int16_t x1 = 0;
+    int16_t y1 = 0;
+    uint16_t w = 0;
+    uint16_t h = 0;
+    canvas->getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+    return x1 + w;
+}
+
+void measureFont(FontId id, const uint8_t* data)
+{
+    int16_t x1 = 0;
+    int16_t y1 = 0;
+    uint16_t w = 0;
+    uint16_t h = 0;
+    FontMetrics& font = fonts[id];
+    font.data = data;
+    canvas->setFont(data);
+    canvas->getTextBounds("H", 0, 0, &x1, &y1, &w, &h);
+    font.capHeight = h;
+    canvas->getTextBounds("Hbdfhkl|", 0, 0, &x1, &y1, &w, &h);
+    font.ascent = -y1;
+    canvas->getTextBounds("gjpqy|", 0, 0, &x1, &y1, &w, &h);
+    const int descent = y1 + h;
+    font.lineHeight = font.ascent + descent + (font.ascent + 7) / 8;
+    font.xRight = boundsRight("X");
+}
+
+// Pen advance of text: bounds only cover inked pixels, so a trailing space
+// would be lost. Appending 'X' and subtracting its own right edge gives the
+// exact advance, spaces included.
+int advance(const char* text, size_t length, FontId font)
+{
+    if (length == 0) {
+        return 0;
+    }
+    memcpy(lineBuffer, text, length);
+    lineBuffer[length] = 'X';
+    lineBuffer[length + 1] = '\0';
+    canvas->setFont(fonts[font].data);
+    return boundsRight(lineBuffer) - fonts[font].xRight;
+}
+
+int textWidth(const char* text, FontId font)
+{
+    return advance(text, strlen(text), font);
+}
+
+// Draws one line of text with its top at top; returns the pen advance.
+int drawText(const char* text, int x, int top, Align align, FontId font, uint16_t color)
+{
+    const int width = textWidth(text, font);
+    const int left = align == Align::Center ? x - width / 2 : align == Align::Right ? x - width : x;
+    canvas->setFont(fonts[font].data);
+    canvas->setTextColor(color);
+    canvas->setCursor(left, top + fonts[font].ascent);
+    canvas->print(text);
+    return width;
+}
+
+// Draws one line of text centered vertically on centerY (by its cap height).
+int drawTextMiddle(const char* text, int x, int centerY, Align align, FontId font, uint16_t color)
+{
+    const FontMetrics& metrics = fonts[font];
+    return drawText(text, x, centerY + metrics.capHeight / 2 - metrics.ascent, align, font, color);
+}
+
+void computeLayout()
+{
+    Layout& rows = layoutRows;
+    rows.pillHeight = fonts[kBarFont].lineHeight + 2;
+    rows.barHeight = rows.pillHeight + 2;
+    rows.titleTop = rows.barHeight + 3;
+    rows.valueTop = rows.titleTop + fonts[kTitleFont].lineHeight + 4;  // divider line at valueTop - 2
+    rows.valueHeight = kHeight - rows.valueTop;
+    rows.countdownHeight = fonts[kSmallFont].lineHeight + 4;
+}
+
+FontId fontFor(mq::FontSize size)
 {
     return size == mq::FontSize::Large ? kLargeFont : kSmallFont;
 }
@@ -105,25 +203,18 @@ uint16_t colorFor(mq::Color color)
     case mq::Color::Blue:
         return kBlue;
     case mq::Color::Green:
-        return TFT_GREEN;
+        return kColorGreen;
     case mq::Color::Red:
-        return TFT_RED;
+        return kColorRed;
     case mq::Color::White:
         break;
     }
-    return TFT_WHITE;
-}
-
-const char* copyToLineBuffer(const char* text, size_t length)
-{
-    memcpy(lineBuffer, text, length);
-    lineBuffer[length] = '\0';
-    return lineBuffer;
+    return kWhite;
 }
 
 int measureText(const char* text, size_t length, void* context)
 {
-    return frame.textWidth(copyToLineBuffer(text, length), *static_cast<uint8_t*>(context));
+    return advance(text, length, *static_cast<FontId*>(context));
 }
 
 bool isShown(const mq::Message& message)
@@ -139,9 +230,9 @@ void layout(const mq::Message& message, uint64_t nowMs)
     shown.fontSize = message.fontSize;
     shown.color = message.color;
     ui::parseMarkup(shown.value, static_cast<uint8_t>(message.color), kColorNames, 4, shown.text, shown.colors);
-    uint8_t font = fontFor(message.fontSize);
-    shown.titleWidth = frame.textWidth(shown.title, kTitleFont);
-    shown.lineHeight = frame.fontHeight(font);
+    FontId font = fontFor(message.fontSize);
+    shown.titleWidth = textWidth(shown.title, kTitleFont);
+    shown.lineHeight = fonts[font].lineHeight;
     shown.lineCount = ui::wrapText(shown.text, kTextWidth, measureText, &font, lines, kMaxLines);
     shown.sinceMs = nowMs;
     shown.valid = true;
@@ -149,44 +240,46 @@ void layout(const mq::Message& message, uint64_t nowMs)
 
 bool isScrolling()
 {
-    return shown.valid &&
-           (shown.titleWidth > kTextWidth || static_cast<int>(shown.lineCount) * shown.lineHeight > kValueHeight);
+    return shown.valid && (shown.titleWidth > kTextWidth ||
+                           static_cast<int>(shown.lineCount) * shown.lineHeight > layoutRows.valueHeight);
 }
 
 // Draws one wrapped line as runs of equal color, left to right.
-void drawLine(const ui::Line& line, int y, uint8_t font)
+void drawLine(const ui::Line& line, int top, FontId font)
 {
     int x = kMargin;
     size_t pos = line.start;
     const size_t end = line.start + line.length;
+    char run[mq::kValueMaxLen + 1];
     while (pos < end) {
         const uint8_t color = shown.colors[pos];
         size_t runEnd = pos + 1;
         while (runEnd < end && shown.colors[runEnd] == color) {
             runEnd++;
         }
-        frame.setTextColor(colorFor(static_cast<mq::Color>(color)));
-        x += frame.drawString(copyToLineBuffer(shown.text + pos, runEnd - pos), x, y, font);
+        memcpy(run, shown.text + pos, runEnd - pos);
+        run[runEnd - pos] = '\0';
+        x += drawText(run, x, top, Align::Left, font, colorFor(static_cast<mq::Color>(color)));
         pos = runEnd;
     }
 }
 
 void drawValue(const mq::Message& message, uint64_t elapsedMs)
 {
-    const uint8_t font = fontFor(message.fontSize);
+    const FontId font = fontFor(message.fontSize);
     const int contentHeight = static_cast<int>(shown.lineCount) * shown.lineHeight;
-    const int offset = ui::scrollOffset(contentHeight, kValueHeight, elapsedMs, kValueSpeedPxPerS, kScrollPauseMs);
+    const int offset =
+        ui::scrollOffset(contentHeight, layoutRows.valueHeight, elapsedMs, kValueSpeedPxPerS, kScrollPauseMs);
 
-    frame.setTextDatum(TL_DATUM);
     for (size_t i = 0; i < shown.lineCount; i++) {
-        const int y = kValueTop + static_cast<int>(i) * shown.lineHeight - offset;
-        if (y + shown.lineHeight <= kValueTop) {
+        const int top = layoutRows.valueTop + static_cast<int>(i) * shown.lineHeight - offset;
+        if (top + shown.lineHeight <= layoutRows.valueTop) {
             continue;
         }
-        if (y >= kHeight) {
+        if (top >= kHeight) {
             break;
         }
-        drawLine(lines[i], y, font);
+        drawLine(lines[i], top, font);
     }
 }
 
@@ -203,52 +296,59 @@ void drawCountdown(uint32_t seconds)
 {
     char text[12];
     ui::formatCountdown(seconds, text, sizeof(text));
-    const int width = frame.textWidth(text, kSmallFont) + 2 * kCountdownPadding;
+    const int height = layoutRows.countdownHeight;
+    const int width = textWidth(text, kSmallFont) + 2 * kCountdownPadding;
     const int x = kWidth - width - 2;
-    const int y = kHeight - kCountdownHeight - 2;
-    frame.fillRoundRect(x, y, width, kCountdownHeight, 3, TFT_BLACK);
-    frame.drawRoundRect(x, y, width, kCountdownHeight, 3, TFT_DARKGREY);
-    frame.setTextDatum(MC_DATUM);
-    frame.setTextColor(TFT_LIGHTGREY);
-    frame.drawString(text, x + width / 2, y + kCountdownHeight / 2, kSmallFont);
+    const int y = kHeight - height - 2;
+    canvas->fillRoundRect(x, y, width, height, 3, kBlack);
+    canvas->drawRoundRect(x, y, width, height, 3, kDarkGrey);
+    drawTextMiddle(text, x + width / 2, y + height / 2, Align::Center, kSmallFont, kColorLightGrey);
 }
 
 void drawEmpty()
 {
-    frame.setTextDatum(MC_DATUM);
-    frame.setTextColor(TFT_DARKGREY);
-    frame.drawString("No messages", kWidth / 2, kValueTop + kValueHeight / 2, kSmallFont);
+    drawTextMiddle("No messages", kWidth / 2, layoutRows.valueTop + layoutRows.valueHeight / 2, Align::Center,
+                   kSmallFont, kDarkGrey);
 }
 
 // Rounded background for one top bar element.
 void drawPill(int x, int width, uint16_t color)
 {
-    frame.fillRoundRect(x, 1, width, kPillHeight, 4, color);
+    canvas->fillRoundRect(x, 1, width, layoutRows.pillHeight, 4, color);
 }
 
-// Battery outline, 18 x 9 px. On battery: a fill level, green above 50 %, amber
-// above 20 %, red below. On USB power: an amber lightning bolt. Unknown: empty.
+// Battery outline, sized to the pill (18 x 9 px on the T-Display). On battery:
+// a fill level, green above 50 %, amber above 20 %, red below. On USB power: an
+// amber lightning bolt. Unknown: empty.
+int batteryIconWidth()
+{
+    return (layoutRows.pillHeight / 2) * 16 / 9 + 2;
+}
+
 void drawBatteryIcon(int x, const StatusBar& bar)
 {
-    constexpr int kBodyWidth = 16;
-    constexpr int kBodyHeight = 9;
-    const int y = 1 + (kPillHeight - kBodyHeight) / 2;
-    frame.drawRect(x, y, kBodyWidth, kBodyHeight, TFT_LIGHTGREY);
-    frame.fillRect(x + kBodyWidth, y + 3, 2, kBodyHeight - 6, TFT_LIGHTGREY);
+    const int bodyHeight = layoutRows.pillHeight / 2;
+    const int bodyWidth = bodyHeight * 16 / 9;
+    const int y = 1 + (layoutRows.pillHeight - bodyHeight) / 2;
+    const int nub = bodyHeight / 3;
+    canvas->drawRect(x, y, bodyWidth, bodyHeight, kColorLightGrey);
+    canvas->fillRect(x + bodyWidth, y + nub, 2, bodyHeight - 2 * nub, kColorLightGrey);
     if (!bar.batteryKnown) {
         return;
     }
     if (bar.externalPower) {
-        const int cx = x + kBodyWidth / 2;
-        frame.drawLine(cx + 2, y + 1, cx - 2, y + 4, kQueueAccent);
-        frame.drawLine(cx - 2, y + 4, cx + 2, y + 4, kQueueAccent);
-        frame.drawLine(cx + 2, y + 4, cx - 2, y + 7, kQueueAccent);
+        const int cx = x + bodyWidth / 2;
+        const int mid = y + bodyHeight / 2;
+        const int step = bodyHeight / 4;
+        canvas->drawLine(cx + step / 2 + 1, y + 1, cx - step / 2 - 1, mid, kQueueAccent);
+        canvas->drawLine(cx - step / 2 - 1, mid, cx + step / 2 + 1, mid, kQueueAccent);
+        canvas->drawLine(cx + step / 2 + 1, mid, cx - step / 2 - 1, y + bodyHeight - 2, kQueueAccent);
         return;
     }
-    const uint16_t fill = bar.batteryPercent > 50 ? TFT_GREEN : bar.batteryPercent > 20 ? kQueueAccent : TFT_RED;
-    const int fillWidth = (kBodyWidth - 4) * bar.batteryPercent / 100;
+    const uint16_t fill = bar.batteryPercent > 50 ? kColorGreen : bar.batteryPercent > 20 ? kQueueAccent : kColorRed;
+    const int fillWidth = (bodyWidth - 4) * bar.batteryPercent / 100;
     if (fillWidth > 0) {
-        frame.fillRect(x + 2, y + 2, fillWidth, kBodyHeight - 4, fill);
+        canvas->fillRect(x + 2, y + 2, fillWidth, bodyHeight - 4, fill);
     }
 }
 
@@ -256,13 +356,13 @@ uint16_t linkColor(Link link)
 {
     switch (link) {
     case Link::Up:
-        return TFT_GREEN;
+        return kColorGreen;
     case Link::Pending:
         return kQueueAccent;
     case Link::Down:
         break;
     }
-    return TFT_RED;
+    return kColorRed;
 }
 
 // Dark bar with separate pills, laid out right to left: clock, battery icon,
@@ -270,22 +370,19 @@ uint16_t linkColor(Link link)
 // left, with a status stripe on its left edge (D-028).
 void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
 {
-    constexpr int kCenterY = 1 + kPillHeight / 2;
-    frame.fillRect(0, 0, kWidth, kBarHeight, kBarBackground);
+    const int centerY = 1 + layoutRows.pillHeight / 2;
+    canvas->fillRect(0, 0, kWidth, layoutRows.barHeight, kBarBackground);
 
     // Clock
-    const int clockWidth = frame.textWidth("88:88", kBarFont) + 2 * kPillPadding;
+    const int clockWidth = textWidth("88:88", kBarFont) + 2 * kPillPadding;
     const int clockX = kWidth - 2 - clockWidth;
     drawPill(clockX, clockWidth, kPillBackground);
-    frame.setTextColor(TFT_WHITE);
-    frame.setTextDatum(MC_DATUM);
-    frame.drawString(bar.clock, clockX + clockWidth / 2, kCenterY, kBarFont);
+    drawTextMiddle(bar.clock, clockX + clockWidth / 2, centerY, Align::Center, kBarFont, kWhite);
 
     // Battery, only on boards with battery sense
-    constexpr int kIconWidth = 18;
     int batteryX = clockX;
     if (bar.hasBattery) {
-        const int batteryWidth = kIconWidth + 2 * kPillPadding;
+        const int batteryWidth = batteryIconWidth() + 2 * kPillPadding;
         batteryX = clockX - kPillGap - batteryWidth;
         drawPill(batteryX, batteryWidth, kPillBackground);
         drawBatteryIcon(batteryX + kPillPadding, bar);
@@ -295,52 +392,47 @@ void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
     char position[12];
     const size_t current = queue.empty() ? 0 : queue.cursor() + 1;
     snprintf(position, sizeof(position), "%u/%u", static_cast<unsigned>(current), static_cast<unsigned>(queue.size()));
-    const int queueWidth = frame.textWidth(position, kBarFont) + 1 + 2 * kPillPadding;
+    const int queueWidth = textWidth(position, kBarFont) + 1 + 2 * kPillPadding;
     const int queueX = batteryX - kPillGap - queueWidth;
     drawPill(queueX, queueWidth, kQueueAccent);
-    frame.setTextColor(TFT_BLACK);
-    frame.drawString(position, queueX + queueWidth / 2, kCenterY, kBarFont);
-    frame.drawString(position, queueX + queueWidth / 2 + 1, kCenterY, kBarFont);
+    drawTextMiddle(position, queueX + queueWidth / 2, centerY, Align::Center, kBarFont, kBlack);
+    drawTextMiddle(position, queueX + queueWidth / 2 + 1, centerY, Align::Center, kBarFont, kBlack);
 
     // Network: status stripe, then the label in the remaining space
     constexpr int kStripeWidth = 3;
     const int networkWidth = queueX - kPillGap - 2;
     drawPill(2, networkWidth, kPillBackground);
-    frame.fillRect(2 + 2, 4, kStripeWidth, kPillHeight - 6, linkColor(bar.link));
-    frame.setTextColor(TFT_LIGHTGREY);
-    frame.setTextDatum(ML_DATUM);
-    frame.drawString(bar.network, 2 + 2 + kStripeWidth + 3, kCenterY, kBarFont);
+    canvas->fillRect(2 + 2, 4, kStripeWidth, layoutRows.pillHeight - 6, linkColor(bar.link));
+    drawTextMiddle(bar.network, 2 + 2 + kStripeWidth + 3, centerY, Align::Left, kBarFont, kColorLightGrey);
 }
 
 void drawTitle(uint64_t elapsedMs)
 {
     const int offset = ui::scrollOffset(shown.titleWidth, kTextWidth, elapsedMs, kTitleSpeedPxPerS, kScrollPauseMs);
-    frame.setTextDatum(TL_DATUM);
-    frame.setTextColor(TFT_LIGHTGREY);
-    frame.drawString(shown.title, kMargin - offset, kTitleTop, kTitleFont);
-    frame.drawFastHLine(0, kValueTop - 2, kWidth, TFT_DARKGREY);
+    drawText(shown.title, kMargin - offset, layoutRows.titleTop, Align::Left, kTitleFont, kColorLightGrey);
+    canvas->drawFastHLine(0, layoutRows.valueTop - 2, kWidth, kDarkGrey);
 }
 
 void drawQueueFullPopup()
 {
-    constexpr int kPopupWidth = 200;
-    constexpr int kPopupHeight = 50;
-    const int x = (kWidth - kPopupWidth) / 2;
-    const int y = (kHeight - kPopupHeight) / 2;
-    frame.fillRoundRect(x, y, kPopupWidth, kPopupHeight, 5, TFT_BLACK);
-    frame.drawRoundRect(x, y, kPopupWidth, kPopupHeight, 5, TFT_RED);
-    frame.drawRoundRect(x + 1, y + 1, kPopupWidth - 2, kPopupHeight - 2, 4, TFT_RED);
-    frame.setTextDatum(MC_DATUM);
-    frame.setTextColor(TFT_RED);
-    frame.drawString("Queue full", kWidth / 2, y + 16, kSmallFont);
-    frame.setTextColor(TFT_LIGHTGREY);
-    frame.drawString("new messages dropped", kWidth / 2, y + 34, kSmallFont);
+    const char* kLine1 = "Queue full";
+    const char* kLine2 = "new messages dropped";
+    const int lineHeight = fonts[kSmallFont].lineHeight;
+    const int width = textWidth(kLine2, kSmallFont) + 24;
+    const int height = 2 * lineHeight + 14;
+    const int x = (kWidth - width) / 2;
+    const int y = (kHeight - height) / 2;
+    canvas->fillRoundRect(x, y, width, height, 5, kBlack);
+    canvas->drawRoundRect(x, y, width, height, 5, kColorRed);
+    canvas->drawRoundRect(x + 1, y + 1, width - 2, height - 2, 4, kColorRed);
+    drawText(kLine1, kWidth / 2, y + 7, Align::Center, kSmallFont, kColorRed);
+    drawText(kLine2, kWidth / 2, y + 7 + lineHeight, Align::Center, kSmallFont, kColorLightGrey);
 }
 
 void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t countdownS, uint64_t nowMs,
             const StatusBar& bar, bool popup)
 {
-    frame.fillSprite(TFT_BLACK);
+    canvas->fillScreen(kBlack);
     if (message != nullptr) {
         drawValue(*message, nowMs - shown.sinceMs);
         if (countdownS >= 0) {
@@ -350,7 +442,7 @@ void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t c
         drawEmpty();
     }
     // The value scrolls under the header, so clear the header area before drawing it.
-    frame.fillRect(0, 0, kWidth, kValueTop, TFT_BLACK);
+    canvas->fillRect(0, 0, kWidth, layoutRows.valueTop, kBlack);
     drawTopBar(queue, bar);
     if (message != nullptr) {
         drawTitle(nowMs - shown.sinceMs);
@@ -358,7 +450,7 @@ void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t c
     if (popup) {
         drawQueueFullPopup();
     }
-    frame.pushSprite(0, 0);
+    canvas->flush();
 }
 
 void storeQr(esp_qrcode_handle_t qrcode)
@@ -380,36 +472,77 @@ int drawQr(int x0, int y0, int scale)
 {
     constexpr int kQuiet = 2;
     const int total = (qrSize + 2 * kQuiet) * scale;
-    frame.fillRect(x0, y0, total, total, TFT_WHITE);
+    canvas->fillRect(x0, y0, total, total, kWhite);
     for (int y = 0; y < qrSize; y++) {
         for (int x = 0; x < qrSize; x++) {
             if (qrModules[y * qrSize + x]) {
-                frame.fillRect(x0 + (x + kQuiet) * scale, y0 + (y + kQuiet) * scale, scale, scale, TFT_BLACK);
+                canvas->fillRect(x0 + (x + kQuiet) * scale, y0 + (y + kQuiet) * scale, scale, scale, kBlack);
             }
         }
     }
     return total;
 }
 
+// Draws lines top to bottom starting at top; gapBefore adds space above a line.
+struct TextLine {
+    const char* text;
+    FontId font;
+    uint16_t color;
+    int gapBefore;
+};
+
+int blockHeight(const TextLine* textLines, size_t count)
+{
+    int height = 0;
+    for (size_t i = 0; i < count; i++) {
+        height += textLines[i].gapBefore + fonts[textLines[i].font].lineHeight;
+    }
+    return height;
+}
+
+void drawBlock(const TextLine* textLines, size_t count, int x, int top, Align align)
+{
+    int y = top;
+    for (size_t i = 0; i < count; i++) {
+        y += textLines[i].gapBefore;
+        drawText(textLines[i].text, x, y, align, textLines[i].font, textLines[i].color);
+        y += fonts[textLines[i].font].lineHeight;
+    }
+}
+
 }  // namespace
 
 bool begin()
 {
-    tft.init();  // also switches the backlight on (TFT_BL in tft_setup.h)
-    tft.setRotation(board::kScreenRotation);
-    tft.fillScreen(TFT_BLACK);
-    // 8-bit color halves the buffer (32,400 bytes at 240 x 135); the four text colors survive the reduction.
-    frame.setColorDepth(8);
-    return frame.createSprite(kWidth, kHeight) != nullptr;
+    board::powerOnDisplay();
+    display = board::createDisplay();
+    // 8-bit indexed canvas: one byte per pixel plus a palette of exact RGB565
+    // colors (32,400 bytes at 240 x 135). The panel's rotation matches the canvas.
+    canvas = new Arduino_Canvas_Indexed(kWidth, kHeight, display, 0, 0, 0, 0);
+    if (!canvas->begin(board::kDisplaySpeedHz)) {
+        return false;
+    }
+    canvas->setTextWrap(false);
+    const board::Fonts boardFonts = board::fonts();
+    measureFont(kBarFont, boardFonts.bar);
+    measureFont(kTitleFont, boardFonts.title);
+    measureFont(kSmallFont, boardFonts.small);
+    measureFont(kLargeFont, boardFonts.large);
+    computeLayout();
+    canvas->fillScreen(kBlack);
+    canvas->flush();
+    return true;
 }
 
 void showBootScreen()
 {
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString("ScreenAPI", kWidth / 2, kHeight / 2 - 14, 4);
-    tft.drawString("v" FW_VERSION, kWidth / 2, kHeight / 2 + 16, 2);
+    const TextLine textLines[] = {
+        {"ScreenAPI", kLargeFont, kWhite, 0},
+        {"v" FW_VERSION, kSmallFont, kColorLightGrey, 6},
+    };
+    canvas->fillScreen(kBlack);
+    drawBlock(textLines, 2, kWidth / 2, (kHeight - blockHeight(textLines, 2)) / 2, Align::Center);
+    canvas->flush();
 }
 
 void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const StatusBar& bar)
@@ -427,9 +560,9 @@ void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, co
     const int32_t countdownS = countdownFor(message);
     const bool frameDue = isScrolling() && nowMs - lastFrameMs >= kFrameMs;
     const bool barChanged = !lastBarValid || strcmp(bar.network, lastBar.network) != 0 || bar.link != lastBar.link ||
-                            bar.hasBattery != lastBar.hasBattery ||
-                            strcmp(bar.clock, lastBar.clock) != 0 || bar.batteryKnown != lastBar.batteryKnown ||
-                            bar.externalPower != lastBar.externalPower || bar.batteryPercent != lastBar.batteryPercent;
+                            bar.hasBattery != lastBar.hasBattery || strcmp(bar.clock, lastBar.clock) != 0 ||
+                            bar.batteryKnown != lastBar.batteryKnown || bar.externalPower != lastBar.externalPower ||
+                            bar.batteryPercent != lastBar.batteryPercent;
     const bool popup = nowMs < popupUntilMs;
     if (!queueChanged && !relayout && !frameDue && countdownS == lastCountdownS && !barChanged &&
         popup == popupShown) {
@@ -452,48 +585,62 @@ void showSetup(const char* qrPayload, const char* serviceName, const char* pop, 
     qrSize = 0;
     esp_qrcode_generate(&config, qrPayload);
 
-    frame.fillSprite(TFT_BLACK);
-    int textX = kMargin;
-    if (qrSize > 0) {
-        // Largest whole-pixel scale that fits the height, at most 4 (version 4 at 3: 111 px).
-        const int scale = min(4, (kHeight - 4) / (qrSize + 4));
-        const int size = (qrSize + 4) * scale;
-        textX += drawQr(kMargin, (kHeight - size) / 2, scale) + 6;
-    }
-    const int top = (kHeight - 126) / 2;  // the text block is 126 px tall
-
     char code[24];
     snprintf(code, sizeof(code), "Code %s", pop);
-    frame.setTextDatum(TL_DATUM);
-    frame.setTextColor(TFT_WHITE);
-    frame.drawString("Wi-Fi setup", textX, top + 6, kSmallFont);
-    frame.setTextColor(TFT_LIGHTGREY);
-    frame.drawString("ESP BLE", textX, top + 28, kSmallFont);
-    frame.drawString("Provisioning app", textX, top + 44, kSmallFont);
-    frame.setTextColor(TFT_WHITE);
-    frame.drawString(serviceName, textX, top + 66, kSmallFont);
-    frame.drawString(code, textX, top + 82, kSmallFont);
-    frame.setTextColor(statusColor);
-    frame.drawString(status, textX, top + 110, kSmallFont);
-    frame.pushSprite(0, 0);
+    const int gap = fonts[kSmallFont].lineHeight / 3;
+    const TextLine textLines[] = {
+        {"Wi-Fi setup", kSmallFont, kWhite, 0},
+        {"ESP BLE", kSmallFont, kColorLightGrey, gap},
+        {"Provisioning app", kSmallFont, kColorLightGrey, 0},
+        {serviceName, kSmallFont, kWhite, gap},
+        {code, kSmallFont, kWhite, 0},
+        {status, kSmallFont, statusColor, gap},
+    };
+    constexpr size_t kLines = sizeof(textLines) / sizeof(textLines[0]);
+    const int textHeight = blockHeight(textLines, kLines);
+
+    canvas->fillScreen(kBlack);
+    const bool portrait = kHeight > kWidth;
+    if (portrait) {
+        // QR code on top, text centered below.
+        int qrTotal = 0;
+        if (qrSize > 0) {
+            const int scale = smaller(8, smaller(kWidth - 2 * kMargin, kHeight - textHeight - 3 * kMargin) / (qrSize + 4));
+            qrTotal = (qrSize + 4) * scale;
+        }
+        const int top = (kHeight - qrTotal - kMargin - textHeight) / 2;
+        if (qrSize > 0) {
+            drawQr((kWidth - qrTotal) / 2, top, qrTotal / (qrSize + 4));
+        }
+        drawBlock(textLines, kLines, kWidth / 2, top + qrTotal + kMargin, Align::Center);
+    } else {
+        // QR code on the left, text to its right; the largest whole-pixel scale that fits the height.
+        int textX = kMargin;
+        if (qrSize > 0) {
+            const int scale = smaller(4, (kHeight - 4) / (qrSize + 4));
+            const int size = (qrSize + 4) * scale;
+            textX += drawQr(kMargin, (kHeight - size) / 2, scale) + 6;
+        }
+        drawBlock(textLines, kLines, textX, (kHeight - textHeight) / 2, Align::Left);
+    }
+    canvas->flush();
 }
 
 void showWelcome(const char* ssid, const char* ip)
 {
     char connected[48];
     snprintf(connected, sizeof(connected), "Connected to %s", ssid);
-    const int top = (kHeight - 135) / 2;  // designed for 135 px, centered on taller screens
-    frame.fillSprite(TFT_BLACK);
-    frame.setTextDatum(TC_DATUM);
-    frame.setTextColor(TFT_LIGHTGREY);
-    frame.drawString("ScreenAPI v" FW_VERSION, kWidth / 2, top + 8, kSmallFont);
-    frame.setTextColor(TFT_WHITE);
-    frame.drawString(connected, kWidth / 2, top + 34, kSmallFont);
-    frame.setTextColor(TFT_GREEN);
-    frame.drawString(ip, kWidth / 2, top + 58, kLargeFont);
-    frame.setTextColor(TFT_LIGHTGREY);
-    frame.drawString("screenapi.local/mcp", kWidth / 2, top + 104, kSmallFont);
-    frame.pushSprite(0, 0);
+    const int gap = fonts[kSmallFont].lineHeight / 2;
+    const TextLine textLines[] = {
+        {"ScreenAPI v" FW_VERSION, kSmallFont, kColorLightGrey, 0},
+        {connected, kSmallFont, kWhite, gap},
+        {ip, kLargeFont, kColorGreen, gap},
+        {"screenapi.local/mcp", kSmallFont, kColorLightGrey, gap},
+    };
+    constexpr size_t kLines = sizeof(textLines) / sizeof(textLines[0]);
+    canvas->fillScreen(kBlack);
+    drawBlock(textLines, kLines, kWidth / 2, (kHeight - blockHeight(textLines, kLines)) / 2, Align::Center);
+    canvas->flush();
 }
 
 void showQueueFullPopup(uint64_t nowMs)
@@ -503,14 +650,20 @@ void showQueueFullPopup(uint64_t nowMs)
 
 void sendScreenshot(Print& out)
 {
-    const uint8_t* pixels = static_cast<const uint8_t*>(frame.getPointer());
+    const uint8_t* pixels = canvas != nullptr ? canvas->getFramebuffer() : nullptr;
     if (pixels == nullptr) {
         out.println("SCREENSHOT unavailable");
         return;
     }
     static const char kHex[] = "0123456789abcdef";
-    char row[kWidth * 2 + 1];
-    out.printf("SCREENSHOT %d %d rgb332\n", kWidth, kHeight);
+    static char row[kWidth * 2 + 1];
+    out.printf("SCREENSHOT %d %d indexed565\n", kWidth, kHeight);
+    // Palette line: 256 RGB565 colors, 4 hex digits each.
+    const uint16_t* palette = canvas->getColorIndex();
+    for (int i = 0; i < 256; i++) {
+        out.printf("%04x", palette[i]);
+    }
+    out.println();
     for (int y = 0; y < kHeight; y++) {
         for (int x = 0; x < kWidth; x++) {
             const uint8_t value = pixels[y * kWidth + x];
@@ -525,11 +678,9 @@ void sendScreenshot(Print& out)
 
 void showNotice(const char* text)
 {
-    frame.fillSprite(TFT_BLACK);
-    frame.setTextDatum(MC_DATUM);
-    frame.setTextColor(TFT_WHITE);
-    frame.drawString(text, kWidth / 2, kHeight / 2, kSmallFont);
-    frame.pushSprite(0, 0);
+    canvas->fillScreen(kBlack);
+    drawTextMiddle(text, kWidth / 2, kHeight / 2, Align::Center, kSmallFont, kWhite);
+    canvas->flush();
 }
 
 }  // namespace screen

@@ -1,5 +1,5 @@
 // Board description for the LilyGO TTGO T-Display (BOARDS.md). Each board has
-// its own folder under include/boards/ with board.h, pins.h, and tft_setup.h;
+// its own folder under include/boards/ with board.h, pins.h, and display.h;
 // the PlatformIO env puts that folder on the include path (PROJECT.md D-030).
 #pragma once
 

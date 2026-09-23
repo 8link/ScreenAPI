@@ -77,7 +77,7 @@ Left and right margins are 4 px.
 platformio.ini   PlatformIO environments; shared [env] defines FW_VERSION; one env per board
 include/boards/<board>/
                  board.h (screen size, rotation, capabilities), pins.h (the board's pins),
-                 tft_setup.h (TFT_eSPI configuration); since 0.0.14 (D-030)
+                 display.h (panel driver and fonts; tft_setup.h before 0.0.15); since 0.0.14 (D-030)
 src/             Firmware sources
 lib/             Project-local libraries
 test/            Unit tests (native env for hardware-independent logic)
@@ -89,9 +89,9 @@ platformio.ini, include/, and src/ exist since 0.0.1; lib/ and test/ since 0.0.2
 
 Since 0.0.14 the firmware is organized per board (D-030). To add one:
 
-1. Copy `include/boards/tdisplay/` to `include/boards/<board>/` and adapt `board.h` (name, screen size after rotation, rotation, `kHasBatterySense`), `pins.h`, and `tft_setup.h` (TFT_eSPI driver, size, pins, offsets).
+1. Copy `include/boards/tdisplay/` to `include/boards/<board>/` and adapt `board.h` (name, screen size after rotation, rotation, `kHasBatterySense`), `pins.h`, and `display.h` (Arduino_GFX bus and panel driver, power-on, four u8g2 fonts).
 2. Add `[env:<board>]` to platformio.ini: `platform`, `board`, `framework = arduino`, `board_build.partitions`, `lib_deps`, and `build_flags = ${env.build_flags} -Iinclude/boards/<board>`.
-3. Build, then check that TFT_eSPI compiled with the board's setup (the preprocessor check in D-013); a wrong include path still builds.
+3. Build with `pio run -e <board> -j 2` (U8g2's font source needs about 1 GB per compiler job).
 4. Add a BOARDS.md section from the template and a row in Supported boards.
 5. Flash, then check the boot line (`ScreenAPI vX.Y.Z on <board name>`), `tools/screenshot.py`, the buttons, and `B` for the battery.
 
@@ -188,7 +188,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Source files:** `src/screen.cpp`, `src/screen.h`, `lib/ui_logic/src/text_wrap.*`, `lib/ui_logic/src/scroll_offset.*`, `lib/ui_logic/src/countdown.*`, `lib/ui_logic/src/markup.*`
 - **Behavior:**
   - Layout: see Architecture, Screen layout.
-  - Fonts: small = TFT_eSPI font 2 (16 px line height), large = font 4 (26 px). Title: font 2, light grey.
+  - Fonts (since 0.0.15, D-031): each board names four u8g2 fonts in its `display.h` (top bar, title, small, large); the T-Display uses `helvR12` for the first three and `helvR18` for large. Row heights (bar, title, value area, countdown box) and the setup and welcome screens are laid out from the fonts' measured metrics at boot. Before 0.0.15: TFT_eSPI font 2 (16 px line) and font 4 (26 px). Title: light grey.
   - Colors: white, blue (0x4C9F, lighter than TFT_BLUE for readability on black), green, red.
   - Inline colors (D-021, since 0.0.5): `{white}`, `{blue}`, `{green}`, `{red}` switch the color of the following text; `{/}` returns to the message color. Other text in braces is shown as written. Tags are removed before wrapping, so they take no space on screen.
   - Word wrap at spaces; a word wider than the line is broken; `\n` starts a new line.
@@ -268,7 +268,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Status:** Done
 - **Added in version:** 0.0.1
 - **Description:** First firmware. Brings up the toolchain, display driver, and board: prints the firmware version on serial and shows it on screen.
-- **Source files:** `src/main.cpp`, `src/screen.cpp`, `include/boards/tdisplay/pins.h`, `include/boards/tdisplay/tft_setup.h`, `platformio.ini`
+- **Source files:** `src/main.cpp`, `src/screen.cpp`, `include/boards/tdisplay/pins.h`, `include/boards/tdisplay/display.h`, `platformio.ini`
 - **Behavior:** On boot, prints `ScreenAPI v<FW_VERSION>` on serial at 115200 baud. The screen, in landscape (rotation 1), shows "ScreenAPI" (font 4) and "v<FW_VERSION>" (font 2) centered, white on black, with the backlight on. Since 0.0.3 the boot screen stays for 1.5 s, then the message screen (F-005) follows.
 - **Verification:** `pio run -e tdisplay` succeeds. On device, 2026-09-22 (reported by the user): serial shows `ScreenAPI v0.0.1` after the ROM boot log (BOARDS.md, On-device verification); the screen works.
 
@@ -361,13 +361,13 @@ Record decisions that a later change could accidentally undo.
 | D-010 | IP address comes from DHCP. It shows on the welcome screen, in the top bar, and as a queued message. | User decision. | 2026-09-22 |
 | D-011 | The MCP server has no password or token. Anyone on the LAN can post messages. | User decision; accepted risk. | 2026-09-22 |
 | D-012 | Time from NTP; timezone from a lookup of the device's public IP. | User decision. | 2026-09-22 |
-| D-013 | Pins live in the board's `pins.h` (since 0.0.14 `include/boards/<board>/`, before `include/`). TFT_eSPI is upstream `bodmer/TFT_eSPI@2.5.43`, configured by the board's `tft_setup.h` (which includes pins.h); library files stay unmodified. Each env needs `-Iinclude/boards/<board>` in build_flags (before 0.0.14: `-Iinclude`). Check with the preprocessor that the library compile sees the board's driver and pins. | One pin header per board. Without the `-I` path, TFT_eSPI does not see tft_setup.h and silently compiles with its default ILI9341 setup while src/ uses ours; the build still succeeds (observed in a verbose build). | 2026-09-22 |
+| D-013 | Superseded by D-031 in 0.0.15 (TFT_eSPI removed). Pins live in the board's `pins.h` (since 0.0.14 `include/boards/<board>/`, before `include/`). TFT_eSPI is upstream `bodmer/TFT_eSPI@2.5.43`, configured by the board's `tft_setup.h` (which includes pins.h); library files stay unmodified. Each env needs `-Iinclude/boards/<board>` in build_flags (before 0.0.14: `-Iinclude`). Check with the preprocessor that the library compile sees the board's driver and pins. | One pin header per board. Without the `-I` path, TFT_eSPI does not see tft_setup.h and silently compiles with its default ILI9341 setup while src/ uses ours; the build still succeeds (observed in a verbose build). | 2026-09-22 |
 | D-014 | Newest message first; a new message is shown immediately. Scroll goes from newest to oldest and wraps. | User decision. | 2026-09-22 |
 | D-015 | A message may carry an optional id. A new message with the same id replaces the old one and moves to the front, also when the queue is full. | User decision, so repeated status updates from one sender take one slot. | 2026-09-22 |
 | D-016 | Limits: id 16, title 64, value 512 characters (raised from 30 and 160 in 0.0.3); time-driven duration 1 to 86400 seconds. Input outside the limits is rejected, not truncated. | The user asked for longer titles and values, with scrolling (D-018), and left the numbers open. 30 messages at these limits take 18,488 bytes. Rejecting lets the MCP client resend a shorter message instead of showing cut-off text. | 2026-09-22 |
 | D-017 | After a reboot, time-driven messages restart their full duration. | User decision. Needs no clock and no extra flash writes. | 2026-09-22 |
 | D-018 | Long text scrolls automatically: the title horizontally, the value vertically. | User decision. Both buttons are already used (D-005), so scrolling needs no input. | 2026-09-22 |
-| D-019 | The screen is drawn into one full-screen 8-bit sprite (240 x 135, 32,400 bytes) and pushed at once. | Flicker-free redraws (AGENTS.md). 8-bit halves the RAM of a 16-bit buffer, and the four text colors and greys survive the reduction. | 2026-09-22 |
+| D-019 | The screen is drawn into one full-screen 8-bit buffer (240 x 135, 32,400 bytes) and pushed at once. Since 0.0.15 an Arduino_GFX indexed canvas: one byte per pixel into a palette of up to 256 exact RGB565 colors (before: TFT_eSPI RGB332 sprite). | Flicker-free redraws (AGENTS.md). 8-bit halves the RAM of a 16-bit buffer; the palette keeps every color exact. | 2026-09-22 |
 | D-020 | A time-driven message counts down only while it is on screen. Its remaining time shows in a small box at the bottom right (moved from bottom left in 0.0.5). | User decision. | 2026-09-23 |
 | D-021 | Inline color tags in the value: `{white}`, `{blue}`, `{green}`, `{red}`, and `{/}` back to the message color. Unknown tags are shown as written; there is no nesting and no escape. Only the value takes tags; the title keeps its fixed style (D-004). | The user asked for parts of the text in different colors and left the syntax open. Short tags are easy for an LLM to write, and leaving unknown braces alone keeps code and JSON readable. | 2026-09-23 |
 | D-022 | Messages are saved as one file on LittleFS in the `spiffs` partition, written to a temporary file and renamed, 1 s after the last change. The firmware formats the partition if it has no file system. | NVS is 20 KB, too small for a full queue next to Wi-Fi credentials. Rename is atomic, so a power cut leaves the old or the new file. The delay turns a burst of changes into one write. Formatting was approved by the user; the partition was blank when checked. | 2026-09-23 |
@@ -378,14 +378,15 @@ Record decisions that a later change could accidentally undo.
 | D-027 | The welcome screen shows for 3 s at the first connection after each boot. The IP message has id `ip`, is timed (60 s on screen), and is re-added only at the first connection after boot or when the IP changes. | The user asked for the IP on a welcome screen and as a queued message and left the details open. The id keeps one IP message at most; timed, because the IP is always in the top bar. | 2026-09-23 |
 | D-028 | Top bar: dark slate bar with separate pills (network with status stripe, amber bold queue position, battery icon, clock). Battery as an icon only, a lightning bolt at or above 4,400 mV. Colors are exact RGB332 values. | The user asked for a dark bar, separation between elements, and a bolder queue position further right. Text for the battery and a Wi-Fi icon did not fit next to a full IP address and `30/30`. The 8-bit frame buffer would shift other colors (a 16-bit dark grey becomes olive). | 2026-09-23 |
 | D-029 | Clock: NTP for the time; the current UTC offset from `ip-api.com` over plain HTTP/1.0, refreshed hourly (every minute after a failure); 24-hour format; `--:--` until both are known. | The user asked for NTP time and a timezone based on the IP (D-012). ip-api.com needs no key, and its offset already includes daylight saving, so no timezone database is needed. A hand-written GET instead of HTTPClient saves about 150 KB of flash. | 2026-09-23 |
-| D-030 | Board-specific code lives in `include/boards/<board>/` (`board.h`, `pins.h`, `tft_setup.h`), selected per PlatformIO env with `-Iinclude/boards/<board>`. `board.h` gives the screen size, rotation, and capabilities; the layout derives from the size; battery support is optional per board. | The user asked for a structure that makes adding boards easy. Keeping each board's headers together avoids `#if` chains, and TFT_eSPI finds the matching `tft_setup.h` through the same include path. | 2026-09-23 |
+| D-030 | Board-specific code lives in `include/boards/<board>/` (`board.h`, `pins.h`, `display.h`; `tft_setup.h` before 0.0.15), selected per PlatformIO env with `-Iinclude/boards/<board>`. `board.h` gives the screen size, rotation, and capabilities; the layout derives from the size; battery support is optional per board. | The user asked for a structure that makes adding boards easy. Keeping each board's headers together avoids `#if` chains. | 2026-09-23 |
+| D-031 | Graphics with Arduino_GFX 1.6.0 on every board: an indexed canvas, u8g2 fonts (U8g2 2.36.18) chosen per board, text measured and aligned by the firmware. TFT_eSPI removed. | The user chose one library for all boards. TFT_eSPI cannot drive the AMOLED board's QSPI panel. 1.6.0 is the newest Arduino_GFX that builds on arduino-esp32 2.0.17 (1.6.1 and later need core 3.x; test builds 2026-09-23). u8g2 fonts come in many sizes for different screen densities. | 2026-09-23 |
 
 ## Verification
 
 Standard PlatformIO commands. Replace `<env>` with an environment from platformio.ini.
 
 ```
-pio run -e <env>                     # build
+pio run -e <env> -j 2                # build (2 jobs: the U8g2 font source needs about 1 GB per job)
 pio run -e <env> -t upload           # build and flash
 pio device monitor -e <env>          # serial monitor
 pio test -e native                   # hardware-independent unit tests

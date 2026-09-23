@@ -5,9 +5,13 @@
 #include <stdint.h>
 
 #include <Print.h>
-#include <TFT_eSPI.h>  // color constants for callers
 
 namespace screen {
+
+// RGB565 colors callers pass in (for example the setup status line).
+constexpr uint16_t kColorGreen = 0x07E0;
+constexpr uint16_t kColorRed = 0xF800;
+constexpr uint16_t kColorLightGrey = 0xD69A;
 
 enum class Link { Up, Pending, Down };
 
@@ -22,8 +26,8 @@ struct StatusBar {
     int batteryPercent;  // 0..100
 };
 
-// Initializes the panel and the off-screen buffer. Returns false if the
-// buffer could not be allocated.
+// Powers on and initializes the panel and the off-screen buffer, and measures
+// the board's fonts. Returns false if the buffer could not be allocated.
 bool begin();
 
 void showBootScreen();
@@ -44,8 +48,10 @@ void showWelcome(const char* ssid, const char* ip);
 void showQueueFullPopup(uint64_t nowMs);
 
 // Writes the last drawn frame as text (F-012): a header line
-// "SCREENSHOT <width> <height> rgb332", one line of hex per pixel row, then "END".
-// Read by tools/screenshot.py. Blocks for about 6 s at 115200 baud.
+// "SCREENSHOT <width> <height> indexed565", a line with the 256-color RGB565
+// palette (4 hex digits each), one line of palette indices (2 hex digits each)
+// per pixel row, then "END". Read by tools/screenshot.py. Blocks for about 6 s
+// at 115200 baud on the T-Display.
 void sendScreenshot(Print& out);
 
 // One centered line of text on an otherwise empty screen.

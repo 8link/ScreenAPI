@@ -77,7 +77,7 @@ Reserved and unusable pins:
 
 | Peripheral | Bus | Address or CS | Driver | Notes |
 |------------|-----|---------------|--------|-------|
-| ST7789V 1.14 inch TFT, 135 x 240 | SPI (VSPI pins) | CS GPIO5 | TFT_eSPI 2.5.43 (upstream; vendor bundles 2.2.20) | See Display |
+| ST7789V 1.14 inch TFT, 135 x 240 | SPI (VSPI pins) | CS GPIO5 | Arduino_GFX 1.6.0 since 0.0.15 (TFT_eSPI 2.5.43 before; vendor bundles TFT_eSPI 2.2.20) | See Display |
 | Two push buttons | GPIO | GPIO35 (delete), GPIO0 (scroll) | TBD | Plus a reset button on CHIP_PU. Mapping per PROJECT.md D-007. |
 
 ### Power
@@ -109,8 +109,8 @@ Measured current per state:
 - **Rotation:** 1 (landscape, 240 x 135) in this project since 0.0.1. The factory test uses rotation 1 for the splash and rotation 0 for color fills.
 - **Bus and speed:** SPI write 40 MHz, read 6 MHz (Setup25). MISO not connected, so reads are not possible in practice.
 - **Backlight:** GPIO4, active HIGH. PWM dimming TBD.
-- **Refresh and flicker behavior:** since 0.0.3 every frame is drawn into a full-screen 8-bit sprite (32,400 bytes) and pushed at once, up to every 33 ms while text scrolls (PROJECT.md D-019). A 16-bit sprite would take 64,800 bytes. No visible flicker (checked by the user, 2026-09-23).
-- **Offsets and init quirks:** the 135 x 240 panel sits off-center in the ST7789 240 x 320 frame memory. TFT_eSPI handles this with `CGRAM_OFFSET` in Setup25. A custom driver must apply the offset itself.
+- **Refresh and flicker behavior:** since 0.0.3 every frame is drawn into a full-screen 8-bit buffer (32,400 bytes; an Arduino_GFX indexed canvas since 0.0.15) and pushed at once, up to every 33 ms while text scrolls (PROJECT.md D-019). A 16-bit sprite would take 64,800 bytes. No visible flicker (checked by the user, 2026-09-23).
+- **Offsets and init quirks:** the 135 x 240 panel sits off-center in the ST7789 240 x 320 frame memory. TFT_eSPI handled this with `CGRAM_OFFSET` in Setup25; Arduino_GFX takes the offsets in the `Arduino_ST7789` constructor: 52, 40 and 53, 40 (`include/boards/tdisplay/display.h`, since 0.0.15).
 
 ### Sensors
 
@@ -186,7 +186,7 @@ ScreenAPI v0.0.1
 | ID | Finding | Impact | Workaround | Verified (yes / no, date) |
 |----|---------|--------|------------|---------------------------|
 | Q-001 | The USB-UART bridge differs by revision. The 2019 schematic shows a CP2104. The PlatformIO board definition lists USB hwid 0x1A86:0x55D4 (WCH CH9102). The vendor README links both WCH and Silicon Labs drivers. | Wrong driver or no upload port on the host. | Check the chip on the unit or its USB VID:PID; install the matching driver if the OS lacks one. | yes, 2026-09-22: the unit in hand enumerates as 10c4:ea60 (CP2104); upload works with `--upload-port /dev/ttyUSB0`. |
-| Q-002 | The vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14. The installed PlatformIO espressif32 7.0.1 ships framework-arduinoespressif32 3.20017 (arduino-esp32 2.0.17). | Possible build errors with the vendor library copy. | Use upstream TFT_eSPI 2.5.43 from the PlatformIO registry, not the vendor copy (PROJECT.md D-013). Builds with espressif32 7.0.1. | yes, 2026-09-22 (build and display output with 0.0.1) |
+| Q-002 | The vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14. The installed PlatformIO espressif32 7.0.1 ships framework-arduinoespressif32 3.20017 (arduino-esp32 2.0.17). | Possible build errors with the vendor library copy. | Use upstream TFT_eSPI 2.5.43 from the PlatformIO registry, not the vendor copy (PROJECT.md D-013). Builds with espressif32 7.0.1. | yes, 2026-09-22 (build and display output with 0.0.1). Not relevant since 0.0.15: TFT_eSPI no longer used. |
 | Q-003 | GPIO0 is BUTTON2 and a strapping pin. Held LOW during reset, the chip enters download mode. | Holding that button while powering on or resetting stops normal boot. | Do not rely on GPIO0 being held at boot. GPIO0 is used only for short presses (scroll); the hold action (clear all) is on GPIO35 (PROJECT.md D-007). | no |
 | Q-004 | Battery voltage divider on GPIO34 is enabled by ADC_EN (GPIO14). Per the factory test comment, it is on by default with USB power, but GPIO14 must be driven HIGH on battery. | Battery reads wrong when GPIO14 is not HIGH. | Drive GPIO14 HIGH before sampling GPIO34. | no |
 | Q-005 | arduino-esp32 2.0.17 has a weak `btInUse()` returning false; the strong one (true) is only linked with the core's BT helpers, which `WiFiProv` does not use. `initArduino()` then releases the BLE controller memory at boot. Seen as `bt_mem_release of classic BT failed 259` and `... BTDM failed 259` at boot; the built firmware's `btInUse` disassembled to `movi a2, 0`. | BLE provisioning cannot start on an unprovisioned board; with saved settings the BLE memory is never returned to the heap (153,084 bytes free instead of 164,836). | Define `extern "C" bool btInUse() { return true; }` in the firmware (`src/network.cpp`). | yes, 2026-09-23: errors gone, `btInUse` returns 1, heap up by 11.7 KB. The setup path itself is not yet tested. |

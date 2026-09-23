@@ -105,14 +105,14 @@ uint16_t setupStatusColor(network::SetupStatus status)
 {
     switch (status) {
     case network::SetupStatus::Connecting:
-        return TFT_GREEN;
+        return screen::kColorGreen;
     case network::SetupStatus::WrongPassword:
     case network::SetupStatus::NotFound:
-        return TFT_RED;
+        return screen::kColorRed;
     case network::SetupStatus::Waiting:
         break;
     }
-    return TFT_LIGHTGREY;
+    return screen::kColorLightGrey;
 }
 
 // Setup screen while provisioning runs (D-023). Messages are not on screen, so

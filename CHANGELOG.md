@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.14
+**Current firmware version:** 0.0.15
 
 ## Format
 
@@ -39,6 +39,36 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.15 - Switch graphics to Arduino_GFX with u8g2 fonts
+
+**Date:** 2026-09-23 20:06
+**Author:** Claude Opus 5.5
+**Type:** Display, refactor
+
+**Summary:**
+Rendering moved from TFT_eSPI to Arduino_GFX 1.6.0 with u8g2 fonts (D-031), the library the Waveshare AMOLED board needs. Each board's `display.h` creates the panel and names its fonts; the layout rows come from the measured font metrics. The frame buffer is an indexed canvas with exact colors (D-019). Screenshots use a new `indexed565` format. Not yet checked on the device: the T-Display was disconnected after the build.
+
+**Changes:**
+- `include/boards/tdisplay/display.h` - New. SPI bus, ST7789 with the panel offsets, backlight, fonts `helvR12` and `helvR18`.
+- `include/boards/tdisplay/tft_setup.h` - Removed.
+- `include/boards/tdisplay/board.h`, `pins.h` - Comments for display.h.
+- `src/screen.cpp` - Arduino_GFX indexed canvas; text measuring and alignment; layout from font metrics; stacked setup screen on portrait boards; boot screen on the canvas; screenshot with palette.
+- `src/screen.h` - Exported colors; screenshot format.
+- `src/main.cpp` - Colors from screen.h.
+- `tools/screenshot.py` - Reads `indexed565` and `rgb332`.
+- `platformio.ini` - Arduino_GFX 1.6.0 and U8g2 2.36.18 instead of TFT_eSPI; `FW_VERSION` bumped to `0.0.15`.
+- `PROJECT.md` - F-005 fonts, F-010 sources, Adding a board, build command; D-013 superseded, D-019, D-030 updated, D-031 added.
+- `BOARDS.md` - Display driver and offsets; Q-002 no longer relevant.
+
+**Verification:**
+- `pio test -e native`: 81 of 81 tests passed.
+- `pio run -e tdisplay -j 2` succeeded: RAM 86,920 bytes (26.5%) static, flash 1,790,925 bytes (91.1%). With the default job count the compiler was killed for lack of memory (U8g2 font source).
+- Test builds on arduino-esp32 2.0.17: Arduino_GFX 1.4.9 to 1.6.0 build; 1.6.1 fails (`esp_rgb_panel_t`); 1.6.2 and later need core 3.x (`esp32-hal-periman.h`); the SH8601 driver first appears in 1.6.x releases that need core 3.x.
+- Not yet on the device: the T-Display was unplugged after the build. To check: screenshots against 0.0.14, boot, fonts, all screens.
+
+**Git commit:**
+- `v0.0.15 - Switch graphics to Arduino_GFX with u8g2 fonts`
 
 ## 0.0.14 - Organize board-specific code per board
 
