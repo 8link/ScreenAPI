@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.4
+**Current firmware version:** 0.0.5
 
 ## Format
 
@@ -39,6 +39,32 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.5 - Add inline text colors and move countdown right
+
+**Date:** 2026-09-23 16:40
+**Author:** Claude Opus 5.5
+**Type:** Display
+
+**Summary:**
+Parts of a message value can have their own color with inline tags such as `{green}ok{/}` (D-021, F-005). The countdown box moved to the bottom right (D-020). Demo messages show both (F-011).
+
+**Changes:**
+- `lib/ui_logic/src/markup.h`, `.cpp` - New. Splits markup into visible text and a color per character.
+- `src/screen.cpp` - Parses markup before wrapping; draws each line as color runs; relayout also on color change; countdown box at the bottom right.
+- `src/main.cpp` - Demo messages with inline colors; countdown text says bottom right.
+- `test/test_ui_logic/test_main.cpp` - 7 markup tests (23 total).
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.5`.
+- `PROJECT.md` - F-003, F-005, F-011; D-020 updated; D-021 added.
+
+**Verification:**
+- `pio test -e native`: 45 of 45 tests passed.
+- `pio run -e tdisplay` succeeded: RAM 44,596 bytes (13.6%) static, flash 312,609 bytes (23.9%). No new warnings.
+- Flashed. Serial: `ScreenAPI v0.0.5`, `Queue: 5 messages`, free heap 294,756 bytes; first message expired at 32.3 s.
+- Not yet checked by eye: colored parts and the countdown box position.
+
+**Git commit:**
+- `v0.0.5 - Add inline text colors and move countdown right`
 
 ## docs - Fix stale verification note in BOARDS.md
 

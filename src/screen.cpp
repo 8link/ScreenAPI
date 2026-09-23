@@ -2,6 +2,7 @@
 
 #include <TFT_eSPI.h>
 #include <countdown.h>
+#include <markup.h>
 #include <scroll_offset.h>
 #include <string.h>
 #include <text_wrap.h>
@@ -35,19 +36,28 @@ constexpr uint32_t kFrameMs = 33;
 
 constexpr uint16_t kBlue = 0x4C9F;  // lighter than TFT_BLUE, which is hard to read on black
 
+// Markup tag names in mq::Color order (D-021).
+const char* const kColorNames[] = {"white", "blue", "green", "red"};
+static_assert(static_cast<int>(mq::Color::White) == 0 && static_cast<int>(mq::Color::Blue) == 1 &&
+                  static_cast<int>(mq::Color::Green) == 2 && static_cast<int>(mq::Color::Red) == 3,
+              "kColorNames must follow mq::Color order");
+
 // Worst case: every character of the value is '\n'.
 constexpr size_t kMaxLines = mq::kValueMaxLen + 1;
 
 TFT_eSPI tft;
 TFT_eSprite frame(&tft);
 
-// Layout of the message on screen; rebuilt only when its text or font changes,
-// so scrolling does not restart when other messages change.
+// Layout of the message on screen; rebuilt only when its text, font, or color
+// changes, so scrolling does not restart when other messages change.
 struct Shown {
     bool valid;
     char title[mq::kTitleMaxLen + 1];
-    char value[mq::kValueMaxLen + 1];
+    char value[mq::kValueMaxLen + 1];  // as received, with markup
+    char text[mq::kValueMaxLen + 1];   // visible text, markup removed
+    uint8_t colors[mq::kValueMaxLen + 1];  // mq::Color per visible character
     mq::FontSize fontSize;
+    mq::Color color;
     int titleWidth;
     int lineHeight;
     size_t lineCount;
@@ -94,8 +104,8 @@ int measureText(const char* text, size_t length, void* context)
 
 bool isShown(const mq::Message& message)
 {
-    return shown.valid && shown.fontSize == message.fontSize && strcmp(shown.title, message.title) == 0 &&
-           strcmp(shown.value, message.value) == 0;
+    return shown.valid && shown.fontSize == message.fontSize && shown.color == message.color &&
+           strcmp(shown.title, message.title) == 0 && strcmp(shown.value, message.value) == 0;
 }
 
 void layout(const mq::Message& message, uint64_t nowMs)
@@ -103,10 +113,12 @@ void layout(const mq::Message& message, uint64_t nowMs)
     strcpy(shown.title, message.title);
     strcpy(shown.value, message.value);
     shown.fontSize = message.fontSize;
+    shown.color = message.color;
+    ui::parseMarkup(shown.value, static_cast<uint8_t>(message.color), kColorNames, 4, shown.text, shown.colors);
     uint8_t font = fontFor(message.fontSize);
     shown.titleWidth = frame.textWidth(shown.title, kTitleFont);
     shown.lineHeight = frame.fontHeight(font);
-    shown.lineCount = ui::wrapText(shown.value, kTextWidth, measureText, &font, lines, kMaxLines);
+    shown.lineCount = ui::wrapText(shown.text, kTextWidth, measureText, &font, lines, kMaxLines);
     shown.sinceMs = nowMs;
     shown.valid = true;
 }
@@ -117,6 +129,24 @@ bool isScrolling()
            (shown.titleWidth > kTextWidth || static_cast<int>(shown.lineCount) * shown.lineHeight > kValueHeight);
 }
 
+// Draws one wrapped line as runs of equal color, left to right.
+void drawLine(const ui::Line& line, int y, uint8_t font)
+{
+    int x = kMargin;
+    size_t pos = line.start;
+    const size_t end = line.start + line.length;
+    while (pos < end) {
+        const uint8_t color = shown.colors[pos];
+        size_t runEnd = pos + 1;
+        while (runEnd < end && shown.colors[runEnd] == color) {
+            runEnd++;
+        }
+        frame.setTextColor(colorFor(static_cast<mq::Color>(color)));
+        x += frame.drawString(copyToLineBuffer(shown.text + pos, runEnd - pos), x, y, font);
+        pos = runEnd;
+    }
+}
+
 void drawValue(const mq::Message& message, uint64_t elapsedMs)
 {
     const uint8_t font = fontFor(message.fontSize);
@@ -124,7 +154,6 @@ void drawValue(const mq::Message& message, uint64_t elapsedMs)
     const int offset = ui::scrollOffset(contentHeight, kValueHeight, elapsedMs, kValueSpeedPxPerS, kScrollPauseMs);
 
     frame.setTextDatum(TL_DATUM);
-    frame.setTextColor(colorFor(message.color));
     for (size_t i = 0; i < shown.lineCount; i++) {
         const int y = kValueTop + static_cast<int>(i) * shown.lineHeight - offset;
         if (y + shown.lineHeight <= kValueTop) {
@@ -133,7 +162,7 @@ void drawValue(const mq::Message& message, uint64_t elapsedMs)
         if (y >= kHeight) {
             break;
         }
-        frame.drawString(copyToLineBuffer(shown.value + lines[i].start, lines[i].length), kMargin, y, font);
+        drawLine(lines[i], y, font);
     }
 }
 
@@ -145,13 +174,13 @@ int32_t countdownFor(const mq::Message* message)
     return static_cast<int32_t>(ui::countdownSeconds(message->remainingMs));
 }
 
-// Small box at the bottom left of the value area, drawn over the value text.
+// Small box at the bottom right of the value area, drawn over the value text.
 void drawCountdown(uint32_t seconds)
 {
     char text[12];
     ui::formatCountdown(seconds, text, sizeof(text));
     const int width = frame.textWidth(text, kSmallFont) + 2 * kCountdownPadding;
-    const int x = 2;
+    const int x = kWidth - width - 2;
     const int y = kHeight - kCountdownHeight - 2;
     frame.fillRoundRect(x, y, width, kCountdownHeight, 3, TFT_BLACK);
     frame.drawRoundRect(x, y, width, kCountdownHeight, 3, TFT_DARKGREY);

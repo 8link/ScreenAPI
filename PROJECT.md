@@ -121,7 +121,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Description:** The device hosts an MCP server on the local network, with no authentication (D-011). MCP is only for passing data in: clients submit messages to display. Clients such as Claude Code connect directly to the device's IP address.
 - **Source files:** TBD
 - **Behavior:**
-  - A message has an optional id, a title, a value, a value font size (one of two), a value color (white, blue, green, red), a kind (time-driven or confirm-required), and for time-driven messages a duration in seconds. Limits are in D-016; the queue rejects input outside them (F-004).
+  - A message has an optional id, a title, a value, a value font size (one of two), a value color (white, blue, green, red), a kind (time-driven or confirm-required), and for time-driven messages a duration in seconds. Parts of the value can be colored with inline tags (D-021); tags count toward the value limit. Limits are in D-016; the queue rejects input outside them (F-004).
   - A message with the same id as a queued one replaces it (D-015).
   - When the queue is full, the message is dropped and the response tells the client the queue is full, so an LLM caller knows its message was not shown.
   - TBD: MCP transport and protocol version, tool names, field names, how invalid input is reported to the client (the response should state the limits).
@@ -155,14 +155,15 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Status:** In progress (message screen in 0.0.3; queue-full popup pending with F-003)
 - **Added in version:** 0.0.3
 - **Description:** The message screen shows the message title on top and the message value in a large text area below, under the top bar (F-007). The title has one fixed style. The value uses the font size (one of two) and color (white, blue, green, red) chosen by the sender (D-004). Long text scrolls automatically (D-018). When the queue is full, a popup says so.
-- **Source files:** `src/screen.cpp`, `src/screen.h`, `lib/ui_logic/src/text_wrap.*`, `lib/ui_logic/src/scroll_offset.*`, `lib/ui_logic/src/countdown.*`
+- **Source files:** `src/screen.cpp`, `src/screen.h`, `lib/ui_logic/src/text_wrap.*`, `lib/ui_logic/src/scroll_offset.*`, `lib/ui_logic/src/countdown.*`, `lib/ui_logic/src/markup.*`
 - **Behavior:**
   - Layout: see Architecture, Screen layout.
   - Fonts: small = TFT_eSPI font 2 (16 px line height), large = font 4 (26 px). Title: font 2, light grey.
   - Colors: white, blue (0x4C9F, lighter than TFT_BLUE for readability on black), green, red.
+  - Inline colors (D-021, since 0.0.5): `{white}`, `{blue}`, `{green}`, `{red}` switch the color of the following text; `{/}` returns to the message color. Other text in braces is shown as written. Tags are removed before wrapping, so they take no space on screen.
   - Word wrap at spaces; a word wider than the line is broken; `\n` starts a new line.
   - Auto-scroll (D-018): a title wider than 232 px scrolls horizontally at 40 px/s; a value taller than 94 px scrolls vertically at 20 px/s. Each pauses 1.5 s at the start, moves to the end, pauses 1.5 s, then jumps back. Scrolling restarts only when the shown text or font changes.
-  - Countdown box (D-020): a time-driven message shows its remaining time in a small bordered box at the bottom left of the value area, over the value text: `45s`, `4:05`, or `1:02:03`, rounded up so it never shows 0. Font 2, light grey on black, dark grey border. The screen redraws when the shown number changes.
+  - Countdown box (D-020): a time-driven message shows its remaining time in a small bordered box at the bottom right of the value area (bottom left in 0.0.4), over the value text: `45s`, `4:05`, or `1:02:03`, rounded up so it never shows 0. Font 2, light grey on black, dark grey border. The screen redraws when the shown number changes.
   - Empty queue: "No messages" centered in the value area.
   - Rendering (D-019): each frame is drawn into one full-screen 8-bit sprite and pushed at once. Redraws happen on queue changes and every 33 ms only while something scrolls.
   - TBD: queue-full popup text and duration (with F-003), handling of non-ASCII characters.
@@ -231,8 +232,8 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Added in version:** 0.0.3
 - **Description:** Five sample messages added at boot so the message screen, scrolling, buttons, and expiry can be tried before MCP exists.
 - **Source files:** `src/main.cpp` (`addDemoMessages`)
-- **Behavior:** Since 0.0.4 shown first: a green large-font message with 30 s on screen. Then: a confirm message with a title and value long enough to scroll both ways; a blue small-font confirm message; a red large-font confirm message long enough to scroll; a white message with 60 s on screen. Serial prints `Queue: 5 messages` and the free heap after boot.
-- **Verification:** On device, 2026-09-23 (0.0.4): serial shows `Queue: 5 messages` at 2.3 s; the green message expired after 30 s of time on screen.
+- **Behavior:** Shown first: a large-font message with inline green and red parts and 30 s on screen. Then: a confirm message with a title and value long enough to scroll both ways; a small-font confirm message showing inline colors and an unknown tag; a red large-font confirm message long enough to scroll; a white message with 60 s on screen. Serial prints `Queue: 5 messages` and the free heap after boot.
+- **Verification:** On device, 2026-09-23 (0.0.5): serial shows `Queue: 5 messages` at 2.3 s; the first message expired after 30 s on screen, at 32.3 s.
 
 <!-- Template for new entries:
 
@@ -310,7 +311,8 @@ Record decisions that a later change could accidentally undo.
 | D-017 | After a reboot, time-driven messages restart their full duration. | User decision. Needs no clock and no extra flash writes. | 2026-09-22 |
 | D-018 | Long text scrolls automatically: the title horizontally, the value vertically. | User decision. Both buttons are already used (D-005), so scrolling needs no input. | 2026-09-22 |
 | D-019 | The screen is drawn into one full-screen 8-bit sprite (240 x 135, 32,400 bytes) and pushed at once. | Flicker-free redraws (AGENTS.md). 8-bit halves the RAM of a 16-bit buffer, and the four text colors and greys survive the reduction. | 2026-09-22 |
-| D-020 | A time-driven message counts down only while it is on screen. Its remaining time shows in a small box at the bottom left. | User decision. | 2026-09-23 |
+| D-020 | A time-driven message counts down only while it is on screen. Its remaining time shows in a small box at the bottom right (moved from bottom left in 0.0.5). | User decision. | 2026-09-23 |
+| D-021 | Inline color tags in the value: `{white}`, `{blue}`, `{green}`, `{red}`, and `{/}` back to the message color. Unknown tags are shown as written; there is no nesting and no escape. Only the value takes tags; the title keeps its fixed style (D-004). | The user asked for parts of the text in different colors and left the syntax open. Short tags are easy for an LLM to write, and leaving unknown braces alone keeps code and JSON readable. | 2026-09-23 |
 
 ## Verification
 

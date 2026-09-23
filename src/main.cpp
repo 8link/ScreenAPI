@@ -28,13 +28,15 @@ void addDemoMessages()
 {
     const mq::NewMessage demos[] = {
         {"demo-timer", "Timer",
-         "Timed message: it counts down only while it is on screen. The box at the bottom left shows the time left.",
+         "Timed message: it counts down only while it is on screen. The box at the bottom right shows the time left.",
          mq::FontSize::Small, mq::Color::White, mq::Kind::Timed, 60},
         {"demo-error", "Upload failed",
          "Serial port not found. Check the USB cable and the USB-UART driver, then run the upload again.",
          mq::FontSize::Large, mq::Color::Red, mq::Kind::Confirm, 0},
-        {"demo-info", "Info", "Short message in blue, small font.", mq::FontSize::Small, mq::Color::Blue,
-         mq::Kind::Confirm, 0},
+        {"demo-colors", "Colors",
+         "Parts of the text can have their own color: {green}green{/}, {red}red{/}, {blue}blue{/}, and back to "
+         "the message color. Unknown tags like {yellow} stay as written.",
+         mq::FontSize::Small, mq::Color::White, mq::Kind::Confirm, 0},
         {"demo-long", "Claude Code - ScreenAPI - working on message screen and buttons",
          "Demo of vertical scrolling. This value is longer than the text area, so it pauses at the top, "
          "scrolls down slowly, pauses at the bottom, and then jumps back to the top. The title above scrolls "
@@ -42,8 +44,8 @@ void addDemoMessages()
          "message, hold it for 1.5 seconds to clear all messages, and press the scroll button to show the "
          "next message.",
          mq::FontSize::Small, mq::Color::White, mq::Kind::Confirm, 0},
-        {"demo-tests", "Tests", "38 of 38 passed. Expires after 30 seconds on screen.", mq::FontSize::Large,
-         mq::Color::Green, mq::Kind::Timed, 30},
+        {"demo-tests", "Tests", "{green}45 passed{/}, {red}0 failed{/}. Gone after 30 s on screen.",
+         mq::FontSize::Large, mq::Color::White, mq::Kind::Timed, 30},
     };
     for (const mq::NewMessage& demo : demos) {
         if (queue.add(demo) != mq::AddResult::Added) {

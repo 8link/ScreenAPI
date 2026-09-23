@@ -1,5 +1,6 @@
 #include <button_tracker.h>
 #include <countdown.h>
+#include <markup.h>
 #include <scroll_offset.h>
 #include <string.h>
 #include <text_wrap.h>
@@ -187,6 +188,74 @@ static void test_countdown_format()
     TEST_ASSERT_EQUAL_STRING("24:00:00", text);
 }
 
+static const char* const kColorNames[] = {"white", "blue", "green", "red"};
+static char markupText[64];
+static uint8_t markupColors[64];
+
+static size_t parse(const char* markup, uint8_t baseColor = 0)
+{
+    return parseMarkup(markup, baseColor, kColorNames, 4, markupText, markupColors);
+}
+
+static void assertColors(const char* expected)
+{
+    // expected holds one digit per visible character.
+    TEST_ASSERT_EQUAL(strlen(expected), strlen(markupText));
+    for (size_t i = 0; expected[i] != '\0'; i++) {
+        TEST_ASSERT_EQUAL_UINT8(expected[i] - '0', markupColors[i]);
+    }
+}
+
+static void test_markup_plain_text_uses_base_color()
+{
+    TEST_ASSERT_EQUAL(3, parse("abc", 2));
+    TEST_ASSERT_EQUAL_STRING("abc", markupText);
+    assertColors("222");
+}
+
+static void test_markup_color_and_reset()
+{
+    TEST_ASSERT_EQUAL(5, parse("a{red}bc{/}de"));
+    TEST_ASSERT_EQUAL_STRING("abcde", markupText);
+    assertColors("03300");
+}
+
+static void test_markup_reset_returns_to_base_color()
+{
+    parse("{green}a{/}b", 1);
+    assertColors("21");
+}
+
+static void test_markup_adjacent_tags_and_tag_at_end()
+{
+    parse("{blue}{red}x{green}");
+    TEST_ASSERT_EQUAL_STRING("x", markupText);
+    assertColors("3");
+}
+
+static void test_markup_unknown_braces_are_literal()
+{
+    TEST_ASSERT_EQUAL(13, parse("{\"k\":1} {Red}"));
+    TEST_ASSERT_EQUAL_STRING("{\"k\":1} {Red}", markupText);
+    parse("{re}x{redd}");
+    TEST_ASSERT_EQUAL_STRING("{re}x{redd}", markupText);
+}
+
+static void test_markup_unclosed_brace_is_literal()
+{
+    parse("a{red");
+    TEST_ASSERT_EQUAL_STRING("a{red", markupText);
+    parse("{");
+    TEST_ASSERT_EQUAL_STRING("{", markupText);
+}
+
+static void test_markup_color_spans_newline()
+{
+    parse("{red}a\nb");
+    TEST_ASSERT_EQUAL_STRING("a\nb", markupText);
+    assertColors("333");
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -206,5 +275,12 @@ int main()
     RUN_TEST(test_button_works_again_after_long_press);
     RUN_TEST(test_countdown_seconds_round_up);
     RUN_TEST(test_countdown_format);
+    RUN_TEST(test_markup_plain_text_uses_base_color);
+    RUN_TEST(test_markup_color_and_reset);
+    RUN_TEST(test_markup_reset_returns_to_base_color);
+    RUN_TEST(test_markup_adjacent_tags_and_tag_at_end);
+    RUN_TEST(test_markup_unknown_braces_are_literal);
+    RUN_TEST(test_markup_unclosed_brace_is_literal);
+    RUN_TEST(test_markup_color_spans_newline);
     return UNITY_END();
 }
