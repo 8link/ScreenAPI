@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.7
+**Current firmware version:** 0.0.8
 
 ## Format
 
@@ -39,6 +39,35 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.8 - Add MCP server with show_message and queue_status
+
+**Date:** 2026-09-23 17:47
+**Author:** Claude Opus 5.5
+**Type:** Networking, MCP
+
+**Summary:**
+MCP server on the device (F-003, D-025): Streamable HTTP without streaming or sessions at `/mcp` on port 80, mDNS name `screenapi.local`, Origin check. Tools `show_message` and `queue_status` with error texts an LLM can act on. Non-ASCII text is mapped or replaced for the ASCII fonts (D-026). Queue-full popup on the screen (F-005).
+
+**Changes:**
+- `lib/mcp_protocol/src/mcp_handler.h`, `.cpp` - New. JSON-RPC handling, version negotiation, tool schemas, argument validation, results.
+- `lib/mcp_protocol/src/text_clean.h`, `.cpp` - New. UTF-8 to ASCII for the fonts.
+- `src/mcp_server.h`, `.cpp` - New. WebServer routes, Origin check, mDNS, request log.
+- `src/screen.h`, `.cpp` - Queue-full popup.
+- `src/main.cpp` - Start the MCP server; poll it; popup and save on MCP changes.
+- `test/test_mcp_protocol/test_main.cpp` - New. 16 tests.
+- `platformio.ini` - ArduinoJson 7.4.3 for both environments; `FW_VERSION` bumped to `0.0.8`.
+- `PROJECT.md` - F-003, F-005, modules, verification commands; D-025, D-026; open questions updated.
+- `BOARDS.md` - mDNS observation.
+
+**Verification:**
+- `pio test -e native`: 74 of 74 tests passed.
+- `pio run -e tdisplay` succeeded: RAM 85,476 bytes (26.1%) static, flash 1,764,553 of 1,966,080 bytes (89.7%). No new warnings.
+- On device, from a machine on the same LAN: initialize (175 ms), notifications/initialized (202), tools/list, show_message (78 ms, test message shown), queue_status, validation error, GET 405, foreign Origin 403. mDNS query for `screenapi.local` answered with 192.168.10.122. Free heap 159,824 bytes after boot.
+- Not yet: a session from Claude Code; the queue-full popup on the device.
+
+**Git commit:**
+- `v0.0.8 - Add MCP server with show_message and queue_status`
 
 ## 0.0.7 - Add Wi-Fi with BLE provisioning
 

@@ -34,6 +34,7 @@ constexpr uint32_t kTitleSpeedPxPerS = 40;
 constexpr uint32_t kValueSpeedPxPerS = 20;
 constexpr uint32_t kScrollPauseMs = 1500;
 constexpr uint32_t kFrameMs = 33;
+constexpr uint32_t kPopupMs = 3000;
 
 constexpr uint16_t kBlue = 0x4C9F;  // lighter than TFT_BLUE, which is hard to read on black
 
@@ -71,6 +72,8 @@ char lineBuffer[mq::kValueMaxLen + 1];
 uint64_t lastFrameMs = 0;
 int32_t lastCountdownS = -1;  // -1: no countdown on screen
 char lastNetworkLabel[24] = "";
+uint64_t popupUntilMs = 0;
+bool popupShown = false;
 
 // QR code modules, copied out of the ESP-IDF encoder's callback.
 constexpr int kQrMaxModules = 37;  // version 5; the provisioning payload needs version 4
@@ -229,8 +232,24 @@ void drawTitle(uint64_t elapsedMs)
     frame.drawFastHLine(0, kValueTop - 2, kWidth, TFT_DARKGREY);
 }
 
+void drawQueueFullPopup()
+{
+    constexpr int kPopupWidth = 200;
+    constexpr int kPopupHeight = 50;
+    const int x = (kWidth - kPopupWidth) / 2;
+    const int y = (kHeight - kPopupHeight) / 2;
+    frame.fillRoundRect(x, y, kPopupWidth, kPopupHeight, 5, TFT_BLACK);
+    frame.drawRoundRect(x, y, kPopupWidth, kPopupHeight, 5, TFT_RED);
+    frame.drawRoundRect(x + 1, y + 1, kPopupWidth - 2, kPopupHeight - 2, 4, TFT_RED);
+    frame.setTextDatum(MC_DATUM);
+    frame.setTextColor(TFT_RED);
+    frame.drawString("Queue full", kWidth / 2, y + 16, kSmallFont);
+    frame.setTextColor(TFT_LIGHTGREY);
+    frame.drawString("new messages dropped", kWidth / 2, y + 34, kSmallFont);
+}
+
 void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t countdownS, uint64_t nowMs,
-            const char* networkLabel)
+            const char* networkLabel, bool popup)
 {
     frame.fillSprite(TFT_BLACK);
     if (message != nullptr) {
@@ -246,6 +265,9 @@ void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t c
     drawTopBar(queue, networkLabel);
     if (message != nullptr) {
         drawTitle(nowMs - shown.sinceMs);
+    }
+    if (popup) {
+        drawQueueFullPopup();
     }
     frame.pushSprite(0, 0);
 }
@@ -316,10 +338,13 @@ void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, co
     const int32_t countdownS = countdownFor(message);
     const bool frameDue = isScrolling() && nowMs - lastFrameMs >= kFrameMs;
     const bool labelChanged = strcmp(networkLabel, lastNetworkLabel) != 0;
-    if (!queueChanged && !relayout && !frameDue && countdownS == lastCountdownS && !labelChanged) {
+    const bool popup = nowMs < popupUntilMs;
+    if (!queueChanged && !relayout && !frameDue && countdownS == lastCountdownS && !labelChanged &&
+        popup == popupShown) {
         return;
     }
-    render(queue, message, countdownS, nowMs, networkLabel);
+    render(queue, message, countdownS, nowMs, networkLabel, popup);
+    popupShown = popup;
     lastFrameMs = nowMs;
     lastCountdownS = countdownS;
     snprintf(lastNetworkLabel, sizeof(lastNetworkLabel), "%s", networkLabel);
@@ -356,6 +381,11 @@ void showSetup(const char* qrPayload, const char* serviceName, const char* pop, 
     frame.setTextColor(statusColor);
     frame.drawString(status, textX, 110, kSmallFont);
     frame.pushSprite(0, 0);
+}
+
+void showQueueFullPopup(uint64_t nowMs)
+{
+    popupUntilMs = nowMs + kPopupMs;
 }
 
 void showNotice(const char* text)

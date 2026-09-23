@@ -145,6 +145,7 @@ None on board.
 - **Modes:** station (PROJECT.md F-002)
 - **Saved settings found:** the unit in hand came with a saved network, `WLAN3`, not written by this project; with 0.0.7 it connected and got 192.168.10.122 by DHCP about 0.9 s after boot (2026-09-23).
 - **Antenna:** on-board antenna (schematic); type TBD
+- **mDNS:** the ESPmDNS responder answers `screenapi.local` with the station IP (raw mDNS query from the LAN, 0.0.8, 2026-09-23).
 - **Observed RSSI:** TBD
 - **Quirks:** TBD
 

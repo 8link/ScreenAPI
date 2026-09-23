@@ -23,6 +23,9 @@ void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, co
 // device name, the proof-of-possession code, and a status line.
 void showSetup(const char* qrPayload, const char* serviceName, const char* pop, const char* status, uint16_t statusColor);
 
+// Shows "Queue full, new messages dropped" over the message screen for 3 s (F-005).
+void showQueueFullPopup(uint64_t nowMs);
+
 // One centered line of text on an otherwise empty screen.
 void showNotice(const char* text);
 

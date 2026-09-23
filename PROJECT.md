@@ -37,7 +37,8 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 | Module | Responsibility | Source path |
 |--------|----------------|-------------|
 | Wi-Fi / provisioning | BLE provisioning, station connect with DHCP, reconnect, Wi-Fi reset (F-002) | `src/network.cpp` |
-| MCP server | HTTP transport, JSON-RPC, tool handling, validation, queue-full reporting (F-003) | TBD |
+| MCP server | HTTP endpoint, Origin check, mDNS (F-003) | `src/mcp_server.cpp` |
+| MCP protocol | JSON-RPC, tools, validation, text cleanup; hardware-independent (F-003) | `lib/mcp_protocol/` |
 | Message queue | Up to 30 messages, validation, replace by id, expiry, delete, clear all, scroll position (F-004); persistence planned | `lib/message_queue/` |
 | Display / UI | Boot screen, welcome screen, top bar, message screen, queue-full popup, buffered rendering (F-005, F-007, F-009, F-010) | `src/screen.cpp` |
 | UI logic | Word wrap, auto-scroll timing, button debounce and long press; hardware-independent (F-005, F-006) | `lib/ui_logic/` |
@@ -123,16 +124,24 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-003 - MCP server on device
 
 - **Area:** Networking
-- **Status:** Planned
-- **Added in version:** not yet implemented
-- **Description:** The device hosts an MCP server on the local network, with no authentication (D-011). MCP is only for passing data in: clients submit messages to display. Clients such as Claude Code connect directly to the device's IP address.
-- **Source files:** TBD
+- **Status:** In progress (implemented in 0.0.8; verified over the LAN with raw HTTP requests, not yet with Claude Code)
+- **Added in version:** 0.0.8
+- **Description:** The device hosts an MCP server on the local network, with no authentication (D-011). MCP is only for passing data in: clients submit messages to display. Clients such as Claude Code connect directly to the device (D-001, D-025).
+- **Source files:** `src/mcp_server.*`, `lib/mcp_protocol/src/mcp_handler.*`, `lib/mcp_protocol/src/text_clean.*`, `test/test_mcp_protocol/test_main.cpp`
 - **Behavior:**
+  - Endpoint: `POST http://<device-ip>/mcp` or `http://screenapi.local/mcp` (mDNS), port 80, started once Wi-Fi is connected. Streamable HTTP transport without streaming: every request gets one `application/json` response; notifications and client responses get 202 with no body. GET and DELETE get 405. No sessions (no `Mcp-Session-Id`).
+  - Methods: `initialize` (answers the client's protocol version if it is one of 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05, otherwise 2025-11-25; capabilities: tools; server name `ScreenAPI`, version FW_VERSION; usage instructions), `ping`, `tools/list`, `tools/call`. Other methods: JSON-RPC error -32601. Batches (JSON arrays), invalid JSON, or a body over 8 KB: HTTP 400 or 413 with a JSON-RPC error.
+  - Tool `show_message`: `value` (required), `title`, `color` (white, blue, green, red; default white), `font_size` (small, large; default small), `kind` (timed, confirm; default timed if `duration_s` is given, otherwise confirm), `duration_s` (whole seconds 1 to 86400), `id`. Result text: `Shown on the display. Queue: N of 30 messages.` or `Replaced the message with id "x" and showed it. ...`.
+  - Tool `queue_status`: `Queue: N of 30 messages.`
+  - Tool errors come back as a tool result with `isError: true` and a sentence the LLM can act on, for example `color must be one of: white blue green red.` or `value is 513 characters; the limit is 512.` Unknown tool: JSON-RPC error -32602.
   - A message has an optional id, a title, a value, a value font size (one of two), a value color (white, blue, green, red), a kind (time-driven or confirm-required), and for time-driven messages a duration in seconds. Parts of the value can be colored with inline tags (D-021); tags count toward the value limit. Limits are in D-016; the queue rejects input outside them (F-004).
   - A message with the same id as a queued one replaces it (D-015).
-  - When the queue is full, the message is dropped and the response tells the client the queue is full, so an LLM caller knows its message was not shown.
-  - TBD: MCP transport and protocol version, tool names, field names, how invalid input is reported to the client (the response should state the limits).
-- **Verification:** TBD
+  - When the queue is full, the message is dropped, the device shows the queue-full popup (F-005), and the result is an error: `Queue full (30 of 30): the message was dropped and not shown. ...`, so an LLM caller knows its message was not shown.
+  - Text cleanup (D-026): title, value, and id are converted to what the ASCII fonts can draw before the limits are checked. The result reports how many characters became '?'.
+  - Origin check: a request with an `Origin` header other than `http://<device-ip>` or `http://screenapi.local` gets 403, so web pages cannot post to the device (DNS rebinding protection required by the MCP spec). Claude Code sends no Origin.
+  - Serial: `MCP: <method or tool>: <result>` per request.
+  - Connect Claude Code: `claude mcp add --transport http screen http://screenapi.local/mcp` (or the IP address).
+- **Verification:** `pio test -e native`: 16 tests in `test_mcp_protocol` (initialize and version negotiation, notifications, ping, tools/list, protocol errors, all show_message fields and defaults, replace by id, validation errors, cleanup and limits, full queue, queue_status, text cleanup). On device, 2026-09-23 (0.0.8), from a machine on the same LAN: initialize 175 ms, show_message 78 ms, tools/list, queue_status, validation error, GET 405, foreign Origin 403; mDNS query for `screenapi.local` answered with 192.168.10.122. Not yet: a session from Claude Code itself; the full-queue path on the device.
 
 ### F-004 - Message queue and lifecycle
 
@@ -173,7 +182,8 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Countdown box (D-020): a time-driven message shows its remaining time in a small bordered box at the bottom right of the value area (bottom left in 0.0.4), over the value text: `45s`, `4:05`, or `1:02:03`, rounded up so it never shows 0. Font 2, light grey on black, dark grey border. The screen redraws when the shown number changes.
   - Empty queue: "No messages" centered in the value area.
   - Rendering (D-019): each frame is drawn into one full-screen 8-bit sprite and pushed at once. Redraws happen on queue changes and every 33 ms only while something scrolls.
-  - TBD: queue-full popup text and duration (with F-003), handling of non-ASCII characters.
+  - Queue-full popup (since 0.0.8): a red-bordered box in the middle of the screen, "Queue full" and "new messages dropped", for 3 s after show_message hits a full queue. Not yet seen on the device.
+  - Non-ASCII text is cleaned up before it reaches the queue (F-003, D-026).
 - **Verification:** `pio test -e native` covers word wrap and scroll timing. On device (0.0.3, 2026-09-22): serial log confirms boot and demo messages; the user checked the screen on 2026-09-23 and reported it looks good (title scrolls sideways, values scroll down, no flicker, text not clipped).
 
 ### F-006 - Buttons: delete, clear all, scroll
@@ -325,6 +335,8 @@ Record decisions that a later change could accidentally undo.
 | D-022 | Messages are saved as one file on LittleFS in the `spiffs` partition, written to a temporary file and renamed, 1 s after the last change. The firmware formats the partition if it has no file system. | NVS is 20 KB, too small for a full queue next to Wi-Fi credentials. Rename is atomic, so a power cut leaves the old or the new file. The delay turns a burst of changes into one write. Formatting was approved by the user; the partition was blank when checked. | 2026-09-23 |
 | D-023 | Wi-Fi setup: ESP BLE Provisioning with security 1; the setup screen shows a QR code, the device name, and a random code. Without saved settings the setup screen covers the messages until provisioned; with settings the message screen stays and shows `no network` while offline. Holding both buttons for 5 s forgets the network. | User decisions. | 2026-09-23 |
 | D-024 | Partition table `min_spiffs.csv`: two 1.9 MB app slots (OTA stays possible), 128 KB LittleFS. | User decision. BLE provisioning made the firmware 1.64 MB, over the default 1.25 MB app slot; MCP needs more. Changing it erased the saved messages once. | 2026-09-23 |
+| D-025 | MCP over Streamable HTTP without streaming or sessions: one JSON response per POST at `/mcp` on port 80, plus the mDNS name `screenapi.local`. Requests with a foreign `Origin` header are rejected. Tools: `show_message` and `queue_status`. | User approved the proposal. JSON-only responses keep the firmware small and work with Claude Code; the Origin check is required by the MCP spec; mDNS keeps the client setting valid when the DHCP address changes. | 2026-09-23 |
+| D-026 | Text from MCP is converted for the ASCII fonts: common typographic characters are mapped (dashes, curly quotes, ellipsis, arrows, bullets, check marks, non-breaking spaces), other non-ASCII characters become '?', and limits apply after the conversion. | The fonts cover ASCII only, and LLM output often contains typographic characters. Mapping keeps the text readable; the result tells the client what was replaced. | 2026-09-23 |
 
 ## Verification
 
@@ -338,14 +350,21 @@ pio test -e native                   # hardware-independent unit tests
 pio test -e <env>                    # on-device tests
 ```
 
+MCP endpoint by hand (F-003), from a machine on the same network:
+
+```
+curl -s -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"queue_status","arguments":{}}}' \
+  http://screenapi.local/mcp
+```
+
 ## Open questions
 
 Known unknowns and issues found outside the current task. Smaller per-feature details are listed as TBD in each feature entry.
 
-- MCP: transport and protocol version, tool names, field names.
 - Timezone: which geolocation service to use, and the fallback when it fails or there is no internet.
-- Memory budget: an HTTP MCP server still has to fit on an ESP32 without PSRAM. Baseline with 0.0.7 after Wi-Fi connect and BLE release: static RAM 81,204 bytes, free heap 164,836 bytes, largest free block 98,292 bytes. Flash: 1,658,345 of 1,966,080 bytes (84.3%). Re-check as each feature lands.
+- Memory budget: baseline with 0.0.8 (Wi-Fi, MCP server, and mDNS running): static RAM 85,476 bytes, free heap 159,824 bytes, largest free block 94,196 bytes after boot. Flash: 1,764,553 of 1,966,080 bytes (89.7%); about 200 KB left in the app slot. Re-check as features land.
+- The core's WebServer reads the whole request body into memory before the handler checks the 8 KB limit, so a LAN client sending a very large Content-Length can exhaust the heap. Accepted for now together with D-011 (no authentication on the LAN).
 - Wi-Fi setup path (F-002) not yet tested on the device, because the board already had saved settings. Test by holding both buttons for 5 s, then pairing with the ESP BLE Provisioning app.
 - The board came with saved Wi-Fi settings for `WLAN3` that this project did not write (BOARDS.md Wi-Fi). Unknown origin; confirm it is the intended network.
-- Character set: the built-in TFT_eSPI fonts cover ASCII only. How non-ASCII text (accents, emoji) from MCP clients is handled is TBD (F-003, F-005). Newlines are supported since 0.0.3.
 - `esp_app_desc` does not carry FW_VERSION. The built image reports project name `arduino-lib-builder` and app version `esp-idf: v4.4.7 38eeba213a`, from the precompiled Arduino core. This does not meet the AGENTS.md rule that esp_app_desc reads FW_VERSION. Options (override the descriptor, or accept it for the Arduino framework) TBD.

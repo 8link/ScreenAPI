@@ -3,6 +3,7 @@
 #include <esp_timer.h>
 #include <message_queue.h>
 
+#include "mcp_server.h"
 #include "network.h"
 #include "pins.h"
 #include "screen.h"
@@ -192,6 +193,7 @@ void setup()
     screen::showBootScreen();
     // Start Wi-Fi during the boot screen, so the setup event has arrived before the first frame.
     network::begin();
+    mcp_server::begin(queue);
     delay(kBootScreenMs);
 
     storage::begin();
@@ -230,7 +232,16 @@ void loop()
     if (contentChanged) {
         Serial.printf("Timed message expired, %u left\n", static_cast<unsigned>(queue.size()));
     }
-    const bool changed = handleButton(event, contentChanged) || contentChanged || returningFromSetup;
+    bool changed = handleButton(event, contentChanged) || contentChanged || returningFromSetup;
+
+    const mcp_server::Events mcpEvents = mcp_server::poll(network::state() == network::State::Connected);
+    if (mcpEvents.messageDropped) {
+        screen::showQueueFullPopup(now);
+    }
+    if (mcpEvents.queueChanged) {
+        contentChanged = true;
+        changed = true;
+    }
     if (contentChanged) {
         scheduleSave(now);
     }
