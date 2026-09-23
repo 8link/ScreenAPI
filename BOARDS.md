@@ -97,7 +97,7 @@ Measured current per state:
 - **Rotation:** 1 (landscape, 240 x 135) in this project since 0.0.1. The factory test uses rotation 1 for the splash and rotation 0 for color fills.
 - **Bus and speed:** SPI write 40 MHz, read 6 MHz (Setup25). MISO not connected, so reads are not possible in practice.
 - **Backlight:** GPIO4, active HIGH. PWM dimming TBD.
-- **Refresh and flicker behavior:** since 0.0.3 every frame is drawn into a full-screen 8-bit sprite (32,400 bytes) and pushed at once, up to every 33 ms while text scrolls (PROJECT.md D-019). A 16-bit sprite would take 64,800 bytes. Flicker and smoothness not yet confirmed by eye.
+- **Refresh and flicker behavior:** since 0.0.3 every frame is drawn into a full-screen 8-bit sprite (32,400 bytes) and pushed at once, up to every 33 ms while text scrolls (PROJECT.md D-019). A 16-bit sprite would take 64,800 bytes. No visible flicker (checked by the user, 2026-09-23).
 - **Offsets and init quirks:** the 135 x 240 panel sits off-center in the ST7789 240 x 320 frame memory. TFT_eSPI handles this with `CGRAM_OFFSET` in Setup25. A custom driver must apply the offset itself.
 
 ### Sensors
@@ -198,7 +198,7 @@ Free heap: 295564 bytes, largest block: 110580 bytes          (2.3 s)
 
 - **Serial capture without a terminal program:** opening the port can leave the chip in download mode (`boot:0x3 ... waiting for download`). Release DTR and RTS, then pulse RTS (EN) for 100 ms to reset into a normal boot.
 - **Smoke test:** backlight on; "ScreenAPI" and the version centered in landscape, not shifted, clipped, or mirrored (F-010)
-- **Known-good firmware version:** 0.0.1 (2026-09-22)
+- **Known-good firmware version:** 0.0.3 (2026-09-23)
 
 ---
 

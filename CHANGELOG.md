@@ -40,6 +40,26 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Record 0.0.3 on-device verification
+
+**Date:** 2026-09-23 16:31
+**Author:** Claude Opus 5.5
+**Type:** Documentation
+
+**Summary:**
+The user checked 0.0.3 on the device (screen, scrolling, buttons) and reported it looks good. F-006 marked Done; F-005 verification recorded; 0.0.3 recorded as known-good.
+
+**Changes:**
+- `PROJECT.md` - F-005 verification, F-006 status and verification.
+- `BOARDS.md` - No visible flicker; known-good firmware 0.0.3.
+- `CHANGELOG.md` - This entry.
+
+**Verification:**
+- No build: documentation only. Device check reported by the user.
+
+**Git commit:**
+- `docs - Record 0.0.3 on-device verification`
+
 ## 0.0.3 - Add message screen, auto-scroll, and buttons
 
 **Date:** 2026-09-22 21:44

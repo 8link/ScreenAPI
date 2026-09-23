@@ -165,12 +165,12 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Empty queue: "No messages" centered in the value area.
   - Rendering (D-019): each frame is drawn into one full-screen 8-bit sprite and pushed at once. Redraws happen on queue changes and every 33 ms only while something scrolls.
   - TBD: queue-full popup text and duration (with F-003), handling of non-ASCII characters.
-- **Verification:** `pio test -e native` covers word wrap and scroll timing. On device (0.0.3, 2026-09-22): serial log confirms boot and demo messages; screen appearance not yet confirmed by the user. Expected: the first demo title scrolls sideways, its value scrolls down, the red large-font message scrolls down, no flicker.
+- **Verification:** `pio test -e native` covers word wrap and scroll timing. On device (0.0.3, 2026-09-22): serial log confirms boot and demo messages; the user checked the screen on 2026-09-23 and reported it looks good (title scrolls sideways, values scroll down, no flicker, text not clipped).
 
 ### F-006 - Buttons: delete, clear all, scroll
 
 - **Area:** Input
-- **Status:** In progress (implemented in 0.0.3; not yet confirmed on device)
+- **Status:** Done
 - **Added in version:** 0.0.3
 - **Description:** Button mapping (D-007):
   - GPIO35 (delete): short press deletes the currently shown message; hold clears all messages.
@@ -181,7 +181,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Delete: short press fires on release and removes the shown message of either kind (F-004). Holding for 1.5 s clears all messages; it fires while still held, without a confirmation step, and the release after it does nothing.
   - Scroll: short press shows the next older message, wrapping to the newest; does nothing with fewer than two messages. Long press has no action.
   - Each action is logged on serial: `Deleted message, N left`, `Cleared all messages`, `Showing message N of M`.
-- **Verification:** `pio test -e native` covers debounce, short press, and long press. On device: TBD (press each button and check the screen and serial log).
+- **Verification:** `pio test -e native` covers debounce, short press, and long press. On device, 2026-09-23: the user checked delete, hold to clear all, and scroll with 0.0.3 and reported it looks good.
 
 ### F-007 - Top status bar
 
