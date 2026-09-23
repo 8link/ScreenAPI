@@ -65,6 +65,9 @@ public:
     // is timed, and removes it when its time runs out. The first call only sets
     // the starting point. Returns true if a message was removed.
     bool tick(uint64_t nowMs);
+    // Call while messages are not on screen (for example during Wi-Fi setup):
+    // the next tick only sets a new starting point, so that time is not charged.
+    void pauseCountdown() { ticking_ = false; }
 
 private:
     void removeAt(size_t index);

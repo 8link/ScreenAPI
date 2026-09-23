@@ -1,3 +1,4 @@
+#include <button_pair.h>
 #include <button_tracker.h>
 #include <countdown.h>
 #include <markup.h>
@@ -256,6 +257,75 @@ static void test_markup_color_spans_newline()
     assertColors("333");
 }
 
+// Steps a pair through time in 5 ms loop ticks and returns the first non-None event.
+static PairEvent run(ButtonPair& pair, bool first, bool second, uint64_t& now, uint64_t untilMs)
+{
+    PairEvent result = PairEvent::None;
+    for (; now <= untilMs; now += 5) {
+        const PairEvent event = pair.update(first, second, now);
+        if (result == PairEvent::None) {
+            result = event;
+        }
+    }
+    return result;
+}
+
+static void test_pair_single_presses_pass_through()
+{
+    ButtonPair pair(30, 1500, 5000);
+    uint64_t now = 0;
+    run(pair, true, false, now, 100);
+    TEST_ASSERT_EQUAL(PairEvent::FirstShort, run(pair, false, false, now, 200));
+    run(pair, false, true, now, 300);
+    TEST_ASSERT_EQUAL(PairEvent::SecondShort, run(pair, false, false, now, 400));
+    TEST_ASSERT_EQUAL(PairEvent::FirstLong, run(pair, true, false, now, 2000));
+    TEST_ASSERT_EQUAL(PairEvent::None, run(pair, false, false, now, 2200));
+}
+
+static void test_pair_both_held_fires_once_and_suppresses_singles()
+{
+    ButtonPair pair(30, 1500, 5000);
+    uint64_t now = 0;
+    // Hold both past the single long-press time: no FirstLong, no SecondLong.
+    TEST_ASSERT_EQUAL(PairEvent::None, run(pair, true, true, now, 4990));
+    TEST_ASSERT_EQUAL(PairEvent::BothLong, run(pair, true, true, now, 5000));
+    TEST_ASSERT_EQUAL(PairEvent::None, run(pair, true, true, now, 9000));
+    // Releasing both reports nothing.
+    TEST_ASSERT_EQUAL(PairEvent::None, run(pair, false, false, now, 9500));
+    // Afterwards single presses work again.
+    run(pair, true, false, now, 9600);
+    TEST_ASSERT_EQUAL(PairEvent::FirstShort, run(pair, false, false, now, 9700));
+}
+
+static void test_pair_short_both_press_reports_nothing()
+{
+    ButtonPair pair(30, 1500, 5000);
+    uint64_t now = 0;
+    TEST_ASSERT_EQUAL(PairEvent::None, run(pair, true, true, now, 300));
+    TEST_ASSERT_EQUAL(PairEvent::None, run(pair, false, false, now, 600));
+}
+
+static void test_pair_staggered_release_reports_nothing()
+{
+    ButtonPair pair(30, 1500, 5000);
+    uint64_t now = 0;
+    run(pair, true, true, now, 1000);
+    TEST_ASSERT_EQUAL(PairEvent::None, run(pair, false, true, now, 3000));  // second still held past 1.5 s
+    TEST_ASSERT_EQUAL(PairEvent::None, run(pair, false, false, now, 3500));
+}
+
+static void test_pair_release_settling_after_a_long_pause()
+{
+    ButtonPair pair(30, 1500, 5000);
+    uint64_t now = 0;
+    run(pair, true, true, now, 500);
+    pair.update(false, false, now);  // release seen
+    now += 200;                      // loop blocked, for example by a flash write
+    TEST_ASSERT_EQUAL(PairEvent::None, pair.update(false, false, now));
+    now += 5;
+    TEST_ASSERT_EQUAL(PairEvent::None, pair.update(false, false, now));
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -282,5 +352,10 @@ int main()
     RUN_TEST(test_markup_unknown_braces_are_literal);
     RUN_TEST(test_markup_unclosed_brace_is_literal);
     RUN_TEST(test_markup_color_spans_newline);
+    RUN_TEST(test_pair_single_presses_pass_through);
+    RUN_TEST(test_pair_both_held_fires_once_and_suppresses_singles);
+    RUN_TEST(test_pair_short_both_press_reports_nothing);
+    RUN_TEST(test_pair_staggered_release_reports_nothing);
+    RUN_TEST(test_pair_release_settling_after_a_long_pause);
     return UNITY_END();
 }

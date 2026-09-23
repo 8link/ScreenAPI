@@ -36,7 +36,7 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 
 | Module | Responsibility | Source path |
 |--------|----------------|-------------|
-| Wi-Fi / provisioning | BLE provisioning, station connect with DHCP, reconnect (F-002) | TBD |
+| Wi-Fi / provisioning | BLE provisioning, station connect with DHCP, reconnect, Wi-Fi reset (F-002) | `src/network.cpp` |
 | MCP server | HTTP transport, JSON-RPC, tool handling, validation, queue-full reporting (F-003) | TBD |
 | Message queue | Up to 30 messages, validation, replace by id, expiry, delete, clear all, scroll position (F-004); persistence planned | `lib/message_queue/` |
 | Display / UI | Boot screen, welcome screen, top bar, message screen, queue-full popup, buffered rendering (F-005, F-007, F-009, F-010) | `src/screen.cpp` |
@@ -107,12 +107,18 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-002 - Wi-Fi connection with BLE provisioning
 
 - **Area:** Wi-Fi, BLE
-- **Status:** Planned
-- **Added in version:** not yet implemented
-- **Description:** The device connects to the local Wi-Fi as a station and gets its IP address from DHCP. Credentials are provisioned with the Espressif ESP BLE Provisioning app and stored on the device.
-- **Source files:** TBD
-- **Behavior:** TBD: first-boot flow, what the screen shows while provisioning, reconnect behavior, how to re-provision or reset credentials.
-- **Verification:** TBD
+- **Status:** In progress (implemented in 0.0.7; connecting with saved settings verified; the setup path not yet tested on the device)
+- **Added in version:** 0.0.7
+- **Description:** The device connects to the local Wi-Fi as a station and gets its IP address from DHCP. Credentials are provisioned with the Espressif ESP BLE Provisioning app and stored on the device (D-002, D-023).
+- **Source files:** `src/network.cpp`, `src/network.h`, `src/screen.cpp` (`showSetup`, `showNotice`), `src/main.cpp`
+- **Behavior:**
+  - Wi-Fi starts during the boot screen through the Arduino `WiFiProv` wrapper: BLE scheme, security 1, BLE memory released when setup ends or is not needed (`WIFI_PROV_SCHEME_HANDLER_FREE_BTDM`).
+  - Saved settings present: connect; the message screen shows `connecting`, then the IP in the top bar (F-007).
+  - No saved settings: full-screen setup screen until provisioned (D-023). Left: QR code with the app payload `{"ver":"v1","name":"PROV_XXXXXX","pop":"<code>","transport":"ble"}`. Right: "Wi-Fi setup", "ESP BLE Provisioning app", the device name `PROV_` + last 3 MAC bytes, `Code <code>`, and a status line: `Waiting for app` (grey), `Connecting...` (green), `Wrong password` or `Network not found` (red; retry from the app). The code is 8 random characters without look-alikes (no 0/o, 1/l/i), new each boot while unprovisioned. Timed messages do not count down while the setup screen is shown.
+  - Network lost: message screen with `no network`; the device retries every 15 s in addition to the core's auto-reconnect.
+  - Wi-Fi reset: hold both buttons for 5 s (F-006). The screen shows "Wi-Fi reset, restarting"; the saved network is erased and the device restarts into setup.
+  - Serial: `Wi-Fi setup: ...` lines for the setup steps, `Wi-Fi: connected to <SSID>, IP <ip>`, `Wi-Fi: disconnected, reason N`, `Wi-Fi: reconnecting`.
+- **Verification:** On device, 2026-09-23 (0.0.7): the board had saved settings from before this project (BOARDS.md Wi-Fi); it connected to `WLAN3` and got 192.168.10.122 about 0.9 s after boot; BLE memory was released (free heap 164,836 bytes). Not yet tested: the setup screen, pairing with the app, wrong-password handling, and the Wi-Fi reset.
 
 ### F-003 - MCP server on device
 
@@ -183,6 +189,8 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Both buttons are active LOW, debounced for 30 ms.
   - Delete: short press fires on release and removes the shown message of either kind (F-004). Holding for 1.5 s clears all messages; it fires while still held, without a confirmation step, and the release after it does nothing.
   - Scroll: short press shows the next older message, wrapping to the newest; does nothing with fewer than two messages. Long press has no action.
+  - Both buttons held for 5 s: Wi-Fi reset (F-002). From the moment both are down until both are released and settled, no single-button action runs, so the delete button's 1.5 s hold cannot clear the queue on the way (`lib/ui_logic/src/button_pair.*`, since 0.0.7).
+  - Button events are ignored while the Wi-Fi setup screen is shown.
   - Each action is logged on serial: `Deleted message, N left`, `Cleared all messages`, `Showing message N of M`.
 - **Verification:** `pio test -e native` covers debounce, short press, and long press. On device, 2026-09-23: the user checked delete, hold to clear all, and scroll with 0.0.3 and reported it looks good.
 
@@ -193,7 +201,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Added in version:** 0.0.3
 - **Description:** A bar across the top of the screen shows the IP address, queue depth, battery, and clock (F-008).
 - **Source files:** `src/screen.cpp`
-- **Behavior:** Center shows the shown message's position and the queue count, such as `2/5` (`0/0` when empty). IP (`no network`), battery (`--%`), and clock (`--:--`) are placeholders until F-002, the battery reading, and F-008 exist. TBD: battery format (voltage, percent, or icon) and what shows on USB power without a battery, what shows before Wi-Fi connects and before the clock is set, update intervals.
+- **Behavior:** Center shows the shown message's position and the queue count, such as `2/5` (`0/0` when empty). Left: the IP address when connected, otherwise `connecting` or `no network` (since 0.0.7). Battery (`--%`) and clock (`--:--`) are placeholders until the battery reading and F-008 exist. TBD: battery format (voltage, percent, or icon) and what shows on USB power without a battery, what shows before Wi-Fi connects and before the clock is set, update intervals.
 - **Verification:** TBD
 
 ### F-008 - Clock with NTP and IP-based timezone
@@ -277,7 +285,7 @@ Station mode on the local network, IP from DHCP (F-002). Credentials are never c
 - **NVS keys:** TBD (Wi-Fi credentials from provisioning)
 - **Message persistence:** up to 30 messages survive reboot (F-004); time-driven messages restart their full duration (D-017).
 - **Filesystem:** LittleFS on the `spiffs` data partition, mounted at `/littlefs` (D-022). Files: `/queue.bin` (saved queue, format in `lib/message_queue/src/queue_codec.h`), `/queue.tmp` (written, then renamed over `/queue.bin`).
-- **Partitions:** Arduino default table, see BOARDS.md MCU, Partition scheme. NVS (20 KB) is too small for a full queue (up to 18,098 bytes encoded).
+- **Partitions:** `min_spiffs.csv` since 0.0.7 (D-024), see BOARDS.md MCU, Partition scheme. LittleFS has 128 KB. NVS (20 KB) is too small for a full queue (up to 18,098 bytes encoded).
 
 ### Power
 
@@ -315,6 +323,8 @@ Record decisions that a later change could accidentally undo.
 | D-020 | A time-driven message counts down only while it is on screen. Its remaining time shows in a small box at the bottom right (moved from bottom left in 0.0.5). | User decision. | 2026-09-23 |
 | D-021 | Inline color tags in the value: `{white}`, `{blue}`, `{green}`, `{red}`, and `{/}` back to the message color. Unknown tags are shown as written; there is no nesting and no escape. Only the value takes tags; the title keeps its fixed style (D-004). | The user asked for parts of the text in different colors and left the syntax open. Short tags are easy for an LLM to write, and leaving unknown braces alone keeps code and JSON readable. | 2026-09-23 |
 | D-022 | Messages are saved as one file on LittleFS in the `spiffs` partition, written to a temporary file and renamed, 1 s after the last change. The firmware formats the partition if it has no file system. | NVS is 20 KB, too small for a full queue next to Wi-Fi credentials. Rename is atomic, so a power cut leaves the old or the new file. The delay turns a burst of changes into one write. Formatting was approved by the user; the partition was blank when checked. | 2026-09-23 |
+| D-023 | Wi-Fi setup: ESP BLE Provisioning with security 1; the setup screen shows a QR code, the device name, and a random code. Without saved settings the setup screen covers the messages until provisioned; with settings the message screen stays and shows `no network` while offline. Holding both buttons for 5 s forgets the network. | User decisions. | 2026-09-23 |
+| D-024 | Partition table `min_spiffs.csv`: two 1.9 MB app slots (OTA stays possible), 128 KB LittleFS. | User decision. BLE provisioning made the firmware 1.64 MB, over the default 1.25 MB app slot; MCP needs more. Changing it erased the saved messages once. | 2026-09-23 |
 
 ## Verification
 
@@ -334,6 +344,8 @@ Known unknowns and issues found outside the current task. Smaller per-feature de
 
 - MCP: transport and protocol version, tool names, field names.
 - Timezone: which geolocation service to use, and the fallback when it fails or there is no internet.
-- Memory budget: BLE provisioning, Wi-Fi, and an HTTP MCP server still have to fit on an ESP32 without PSRAM. Baseline with 0.0.6 (queue 18,264 bytes, 8-bit screen buffer 32,400 bytes, LittleFS mounted): free heap 291,892 bytes, largest free block 110,580 bytes after boot. Re-check as each feature lands.
+- Memory budget: an HTTP MCP server still has to fit on an ESP32 without PSRAM. Baseline with 0.0.7 after Wi-Fi connect and BLE release: static RAM 81,204 bytes, free heap 164,836 bytes, largest free block 98,292 bytes. Flash: 1,658,345 of 1,966,080 bytes (84.3%). Re-check as each feature lands.
+- Wi-Fi setup path (F-002) not yet tested on the device, because the board already had saved settings. Test by holding both buttons for 5 s, then pairing with the ESP BLE Provisioning app.
+- The board came with saved Wi-Fi settings for `WLAN3` that this project did not write (BOARDS.md Wi-Fi). Unknown origin; confirm it is the intended network.
 - Character set: the built-in TFT_eSPI fonts cover ASCII only. How non-ASCII text (accents, emoji) from MCP clients is handled is TBD (F-003, F-005). Newlines are supported since 0.0.3.
 - `esp_app_desc` does not carry FW_VERSION. The built image reports project name `arduino-lib-builder` and app version `esp-idf: v4.4.7 38eeba213a`, from the precompiled Arduino core. This does not meet the AGENTS.md rule that esp_app_desc reads FW_VERSION. Options (override the descriptor, or accept it for the Arduino framework) TBD.

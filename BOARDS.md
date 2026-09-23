@@ -32,16 +32,18 @@ Sources: vendor repository https://github.com/Xinyuan-LilyGO/TTGO-T-Display (rea
 - **Flash (size / mode / speed):** 4 MB (W25Q32 on the schematic) / DIO / 40 MHz (PlatformIO board definition)
 - **PSRAM:** none. The vendor README says to select PSRAM Disabled; the schematic has no PSRAM.
 - **USB type:** USB-C via a USB-UART bridge chip; auto-reset through DTR/RTS transistors. The unit in hand has a Silicon Labs CP2104 (USB 10c4:ea60). The bridge chip varies by revision, see Q-001.
-- **Partition scheme:** Arduino default (from the 0.0.6 build, `partitions.bin`):
+- **Partition scheme:** `min_spiffs.csv` since 0.0.7 (PROJECT.md D-024):
 
 | Name | Type | SubType | Offset | Size |
 |------|------|---------|--------|------|
 | nvs | data | nvs | 0x9000 | 20K |
 | otadata | data | ota | 0xe000 | 8K |
-| app0 | app | ota_0 | 0x10000 | 1280K |
-| app1 | app | ota_1 | 0x150000 | 1280K |
-| spiffs | data | spiffs | 0x290000 | 1408K (used as LittleFS) |
-| coredump | data | coredump | 0x3f0000 | 64K |
+| app0 | app | ota_0 | 0x10000 | 1920K |
+| app1 | app | ota_1 | 0x1F0000 | 1920K |
+| spiffs | data | spiffs | 0x3D0000 | 128K (used as LittleFS) |
+| coredump | data | coredump | 0x3F0000 | 64K |
+
+  Before 0.0.7: Arduino default (app0 and app1 1280K each, spiffs 0x290000 1408K).
 - **Strapping pins:** GPIO0 (BUTTON2), GPIO2, GPIO5 (TFT_CS), GPIO12, GPIO15. See Q-003.
 
 ### Pin mapping
@@ -119,8 +121,8 @@ None on board.
 
 ### Storage
 
-- **NVS namespaces:** TBD
-- **Filesystem:** LittleFS on the `spiffs` partition (1,441,792 bytes). The partition was blank (all 0xFF, read back on 2026-09-23) and was formatted by firmware 0.0.6 on first boot. Observed with 0.0.6:
+- **NVS namespaces:** the ESP-IDF Wi-Fi driver keeps the station settings in NVS (per ESP-IDF; not inspected).
+- **Filesystem:** LittleFS on the `spiffs` partition. Since 0.0.7: 131,072 bytes at 0x3D0000, formatted on the first 0.0.7 boot. Before: 1,441,792 bytes at 0x290000; blank (all 0xFF, read back on 2026-09-23) and formatted by 0.0.6. Observed with 0.0.6:
   - The first mount of the blank partition logs `Corrupted dir pair at {0x0, 0x1}` and `mount failed, (-84)`, then formats and mounts. Expected once; harmless.
   - `LittleFS.exists()` on a missing file logs `open(): ... does not exist, no permits for creation` as an error (arduino-esp32 behavior). Harmless.
   - `LittleFS.rename()` replaces an existing file; no remove needed.
@@ -130,9 +132,9 @@ None on board.
 
 ### BLE
 
-- **Stack (NimBLE / Bluedroid):** TBD
-- **Role:** peripheral during Wi-Fi provisioning (PROJECT.md F-002)
-- **Services and UUIDs:** TBD (defined by the ESP BLE Provisioning protocol)
+- **Stack (NimBLE / Bluedroid):** Bluedroid, from the precompiled Arduino core, used through ESP-IDF `wifi_provisioning` (Arduino `WiFiProv`).
+- **Role:** peripheral during Wi-Fi provisioning (PROJECT.md F-002). The stack's memory is released after setup, or right at boot when already provisioned; BLE is off in normal operation. Needs the `btInUse()` override (Q-005).
+- **Services and UUIDs:** ESP BLE Provisioning protocol; service UUID from the Arduino `WiFiProv` wrapper (`custom_service_uuid`). Advertised name `PROV_` + last 3 MAC bytes (`PROV_2536E8` on the unit in hand).
 - **MTU:** TBD
 - **Connection interval:** TBD
 - **Observed quirks:** TBD
@@ -141,6 +143,7 @@ None on board.
 ### Wi-Fi
 
 - **Modes:** station (PROJECT.md F-002)
+- **Saved settings found:** the unit in hand came with a saved network, `WLAN3`, not written by this project; with 0.0.7 it connected and got 192.168.10.122 by DHCP about 0.9 s after boot (2026-09-23).
 - **Antenna:** on-board antenna (schematic); type TBD
 - **Observed RSSI:** TBD
 - **Quirks:** TBD
@@ -184,6 +187,7 @@ ScreenAPI v0.0.1
 | Q-002 | The vendor README says their bundled TFT_eSPI compiles only up to arduino-esp32 2.0.14. The installed PlatformIO espressif32 7.0.1 ships framework-arduinoespressif32 3.20017 (arduino-esp32 2.0.17). | Possible build errors with the vendor library copy. | Use upstream TFT_eSPI 2.5.43 from the PlatformIO registry, not the vendor copy (PROJECT.md D-013). Builds with espressif32 7.0.1. | yes, 2026-09-22 (build and display output with 0.0.1) |
 | Q-003 | GPIO0 is BUTTON2 and a strapping pin. Held LOW during reset, the chip enters download mode. | Holding that button while powering on or resetting stops normal boot. | Do not rely on GPIO0 being held at boot. GPIO0 is used only for short presses (scroll); the hold action (clear all) is on GPIO35 (PROJECT.md D-007). | no |
 | Q-004 | Battery voltage divider on GPIO34 is enabled by ADC_EN (GPIO14). Per the factory test comment, it is on by default with USB power, but GPIO14 must be driven HIGH on battery. | Battery reads wrong when GPIO14 is not HIGH. | Drive GPIO14 HIGH before sampling GPIO34. | no |
+| Q-005 | arduino-esp32 2.0.17 has a weak `btInUse()` returning false; the strong one (true) is only linked with the core's BT helpers, which `WiFiProv` does not use. `initArduino()` then releases the BLE controller memory at boot. Seen as `bt_mem_release of classic BT failed 259` and `... BTDM failed 259` at boot; the built firmware's `btInUse` disassembled to `movi a2, 0`. | BLE provisioning cannot start on an unprovisioned board; with saved settings the BLE memory is never returned to the heap (153,084 bytes free instead of 164,836). | Define `extern "C" bool btInUse() { return true; }` in the firmware (`src/network.cpp`). | yes, 2026-09-23: errors gone, `btInUse` returns 1, heap up by 11.7 KB. The setup path itself is not yet tested. |
 
 ### Protocol findings
 

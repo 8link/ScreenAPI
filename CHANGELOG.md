@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.6
+**Current firmware version:** 0.0.7
 
 ## Format
 
@@ -39,6 +39,37 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.7 - Add Wi-Fi with BLE provisioning
+
+**Date:** 2026-09-23 17:25
+**Author:** Claude Opus 5.5
+**Type:** Wi-Fi, BLE, partitions
+
+**Summary:**
+Wi-Fi station with ESP BLE Provisioning (F-002, D-023): setup screen with QR code, device name, and random code when no network is saved; IP, `connecting`, or `no network` in the top bar (F-007); retry every 15 s while offline; both buttons held 5 s forget the network (F-006). Partition table changed to `min_spiffs.csv` (D-024), approved by the user; the saved messages were erased once. Fixed Arduino releasing the BLE memory at boot (Q-005).
+
+**Changes:**
+- `src/network.h`, `.cpp` - New. Provisioning start, device name and code, QR payload, state from Wi-Fi events, reconnect, reset; `btInUse()` override.
+- `src/screen.h`, `.cpp` - Setup screen with QR code (ESP-IDF `qrcode` component), notice screen, network label in the top bar.
+- `src/main.cpp` - Network start during the boot screen, setup mode, button pair with Wi-Fi reset, countdown paused during setup, heap log after connect.
+- `lib/ui_logic/src/button_pair.h`, `.cpp` - New. Two buttons with a both-held event; single actions suppressed during a two-button hold.
+- `lib/ui_logic/src/button_tracker.h` - `idle()`.
+- `lib/message_queue/src/message_queue.h` - `pauseCountdown()`.
+- `test/test_ui_logic/test_main.cpp` - 5 button pair tests (28 total).
+- `test/test_message_queue/test_main.cpp` - 1 pause test (23 total).
+- `platformio.ini` - `board_build.partitions = min_spiffs.csv`; `FW_VERSION` bumped to `0.0.7`.
+- `PROJECT.md` - F-002, F-006, F-007, storage, modules; D-023, D-024; memory baseline and open questions.
+- `BOARDS.md` - Partition table, filesystem, NVS, BLE, Wi-Fi findings; Q-005.
+
+**Verification:**
+- `pio test -e native`: 58 of 58 tests passed.
+- `pio run -e tdisplay` succeeded: RAM 81,204 bytes (24.8%) static, flash 1,658,345 of 1,966,080 bytes (84.3%). No new warnings.
+- Flashed. First boot: LittleFS formatted at the new location, demo messages added and saved. The board had a saved network (`WLAN3`): connected, IP 192.168.10.122. After the Q-005 fix: no `bt_mem_release ... failed 259` errors, `btInUse` returns 1, free heap 164,836 bytes, largest block 98,292 bytes.
+- Not yet tested on the device: setup screen, pairing with the app, wrong password, Wi-Fi reset.
+
+**Git commit:**
+- `v0.0.7 - Add Wi-Fi with BLE provisioning`
 
 ## 0.0.6 - Save messages across reboots
 

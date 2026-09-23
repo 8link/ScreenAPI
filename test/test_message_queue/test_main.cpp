@@ -262,6 +262,18 @@ static void test_expiry_keeps_older_messages_in_order()
     TEST_ASSERT_EQUAL_STRING("m0", queue->at(1).value);
 }
 
+static void test_pause_countdown_skips_time_off_screen()
+{
+    queue->add(timedMessage("timed", 10));
+    queue->tick(0);
+    queue->tick(2000);
+    queue->pauseCountdown();
+    queue->tick(60000);  // only sets the new start
+    TEST_ASSERT_EQUAL_UINT32(8000, queue->current()->remainingMs);
+    queue->tick(61000);
+    TEST_ASSERT_EQUAL_UINT32(7000, queue->current()->remainingMs);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -287,5 +299,6 @@ int main()
     RUN_TEST(test_tick_on_empty_queue);
     RUN_TEST(test_replace_resets_remaining_time);
     RUN_TEST(test_expiry_keeps_older_messages_in_order);
+    RUN_TEST(test_pause_countdown_skips_time_off_screen);
     return UNITY_END();
 }

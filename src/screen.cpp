@@ -3,6 +3,7 @@
 #include <TFT_eSPI.h>
 #include <countdown.h>
 #include <markup.h>
+#include <qrcode.h>
 #include <scroll_offset.h>
 #include <string.h>
 #include <text_wrap.h>
@@ -69,6 +70,12 @@ ui::Line lines[kMaxLines];
 char lineBuffer[mq::kValueMaxLen + 1];
 uint64_t lastFrameMs = 0;
 int32_t lastCountdownS = -1;  // -1: no countdown on screen
+char lastNetworkLabel[24] = "";
+
+// QR code modules, copied out of the ESP-IDF encoder's callback.
+constexpr int kQrMaxModules = 37;  // version 5; the provisioning payload needs version 4
+bool qrModules[kQrMaxModules * kQrMaxModules];
+int qrSize = 0;
 
 uint8_t fontFor(mq::FontSize size)
 {
@@ -196,8 +203,8 @@ void drawEmpty()
     frame.drawString("No messages", kWidth / 2, kValueTop + kValueHeight / 2, kSmallFont);
 }
 
-// IP, battery, and clock are placeholders until F-002, F-007, and F-008 exist.
-void drawTopBar(const mq::MessageQueue& queue)
+// Battery and clock are placeholders until the battery reading and F-008 exist.
+void drawTopBar(const mq::MessageQueue& queue, const char* networkLabel)
 {
     char position[12];
     const size_t current = queue.empty() ? 0 : queue.cursor() + 1;
@@ -205,7 +212,7 @@ void drawTopBar(const mq::MessageQueue& queue)
 
     frame.setTextColor(TFT_LIGHTGREY);
     frame.setTextDatum(TL_DATUM);
-    frame.drawString("no network", kMargin, 1, kBarFont);
+    frame.drawString(networkLabel, kMargin, 1, kBarFont);
     frame.setTextDatum(TC_DATUM);
     frame.drawString(position, kWidth / 2, 1, kBarFont);
     frame.setTextDatum(TR_DATUM);
@@ -222,7 +229,8 @@ void drawTitle(uint64_t elapsedMs)
     frame.drawFastHLine(0, kValueTop - 2, kWidth, TFT_DARKGREY);
 }
 
-void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t countdownS, uint64_t nowMs)
+void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t countdownS, uint64_t nowMs,
+            const char* networkLabel)
 {
     frame.fillSprite(TFT_BLACK);
     if (message != nullptr) {
@@ -235,11 +243,41 @@ void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t c
     }
     // The value scrolls under the header, so clear the header area before drawing it.
     frame.fillRect(0, 0, kWidth, kValueTop, TFT_BLACK);
-    drawTopBar(queue);
+    drawTopBar(queue, networkLabel);
     if (message != nullptr) {
         drawTitle(nowMs - shown.sinceMs);
     }
     frame.pushSprite(0, 0);
+}
+
+void storeQr(esp_qrcode_handle_t qrcode)
+{
+    qrSize = esp_qrcode_get_size(qrcode);
+    if (qrSize > kQrMaxModules) {
+        qrSize = 0;
+        return;
+    }
+    for (int y = 0; y < qrSize; y++) {
+        for (int x = 0; x < qrSize; x++) {
+            qrModules[y * qrSize + x] = esp_qrcode_get_module(qrcode, x, y);
+        }
+    }
+}
+
+// Draws the QR code black on white with a 2-module quiet zone; returns its width.
+int drawQr(int x0, int y0, int scale)
+{
+    constexpr int kQuiet = 2;
+    const int total = (qrSize + 2 * kQuiet) * scale;
+    frame.fillRect(x0, y0, total, total, TFT_WHITE);
+    for (int y = 0; y < qrSize; y++) {
+        for (int x = 0; x < qrSize; x++) {
+            if (qrModules[y * qrSize + x]) {
+                frame.fillRect(x0 + (x + kQuiet) * scale, y0 + (y + kQuiet) * scale, scale, scale, TFT_BLACK);
+            }
+        }
+    }
+    return total;
 }
 
 }  // namespace
@@ -263,7 +301,7 @@ void showBootScreen()
     tft.drawString("v" FW_VERSION, kWidth / 2, kHeight / 2 + 16, 2);
 }
 
-void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged)
+void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const char* networkLabel)
 {
     const mq::Message* message = queue.current();
     const bool relayout = message != nullptr ? !isShown(*message) : shown.valid;
@@ -277,12 +315,56 @@ void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged)
 
     const int32_t countdownS = countdownFor(message);
     const bool frameDue = isScrolling() && nowMs - lastFrameMs >= kFrameMs;
-    if (!queueChanged && !relayout && !frameDue && countdownS == lastCountdownS) {
+    const bool labelChanged = strcmp(networkLabel, lastNetworkLabel) != 0;
+    if (!queueChanged && !relayout && !frameDue && countdownS == lastCountdownS && !labelChanged) {
         return;
     }
-    render(queue, message, countdownS, nowMs);
+    render(queue, message, countdownS, nowMs, networkLabel);
     lastFrameMs = nowMs;
     lastCountdownS = countdownS;
+    snprintf(lastNetworkLabel, sizeof(lastNetworkLabel), "%s", networkLabel);
+}
+
+void showSetup(const char* qrPayload, const char* serviceName, const char* pop, const char* status, uint16_t statusColor)
+{
+    esp_qrcode_config_t config;
+    config.display_func = storeQr;
+    config.max_qrcode_version = 5;
+    config.qrcode_ecc_level = ESP_QRCODE_ECC_LOW;
+    qrSize = 0;
+    esp_qrcode_generate(&config, qrPayload);
+
+    frame.fillSprite(TFT_BLACK);
+    int textX = kMargin;
+    if (qrSize > 0) {
+        constexpr int kScale = 3;  // version 4: (33 + 4) * 3 = 111 px
+        const int size = (qrSize + 4) * kScale;
+        textX += drawQr(kMargin, (kHeight - size) / 2, kScale) + 6;
+    }
+
+    char code[24];
+    snprintf(code, sizeof(code), "Code %s", pop);
+    frame.setTextDatum(TL_DATUM);
+    frame.setTextColor(TFT_WHITE);
+    frame.drawString("Wi-Fi setup", textX, 6, kSmallFont);
+    frame.setTextColor(TFT_LIGHTGREY);
+    frame.drawString("ESP BLE", textX, 28, kSmallFont);
+    frame.drawString("Provisioning app", textX, 44, kSmallFont);
+    frame.setTextColor(TFT_WHITE);
+    frame.drawString(serviceName, textX, 66, kSmallFont);
+    frame.drawString(code, textX, 82, kSmallFont);
+    frame.setTextColor(statusColor);
+    frame.drawString(status, textX, 110, kSmallFont);
+    frame.pushSprite(0, 0);
+}
+
+void showNotice(const char* text)
+{
+    frame.fillSprite(TFT_BLACK);
+    frame.setTextDatum(MC_DATUM);
+    frame.setTextColor(TFT_WHITE);
+    frame.drawString(text, kWidth / 2, kHeight / 2, kSmallFont);
+    frame.pushSprite(0, 0);
 }
 
 }  // namespace screen

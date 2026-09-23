@@ -17,6 +17,9 @@ public:
     // the release after it fires nothing.
     ButtonEvent update(bool pressed, uint64_t nowMs);
 
+    // True when the button is released and its release has been debounced.
+    bool idle() const { return !raw_ && !stable_; }
+
 private:
     uint32_t debounceMs_;
     uint32_t longPressMs_;

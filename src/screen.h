@@ -4,6 +4,8 @@
 #include <message_queue.h>
 #include <stdint.h>
 
+#include <TFT_eSPI.h>  // color constants for callers
+
 namespace screen {
 
 // Initializes the panel and the off-screen buffer. Returns false if the
@@ -12,7 +14,16 @@ bool begin();
 
 void showBootScreen();
 
-// Redraws when the queue changed, text is scrolling, or the countdown changed. Call every loop.
-void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged);
+// Message screen. Redraws when the queue changed, text is scrolling, the
+// countdown changed, or the network label changed. Call every loop while the
+// message screen is visible; pass queueChanged = true when returning to it.
+void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const char* networkLabel);
+
+// Wi-Fi setup screen (F-002): QR code for the ESP BLE Provisioning app, the
+// device name, the proof-of-possession code, and a status line.
+void showSetup(const char* qrPayload, const char* serviceName, const char* pop, const char* status, uint16_t statusColor);
+
+// One centered line of text on an otherwise empty screen.
+void showNotice(const char* text);
 
 }  // namespace screen
