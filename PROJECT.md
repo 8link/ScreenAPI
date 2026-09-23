@@ -45,7 +45,7 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 | Buttons | Reading the pins and acting on button events (F-006) | `src/main.cpp` |
 | Main loop | Buttons, expiry, MCP events, connection announcement, screen update | `src/main.cpp` |
 | Storage | Mount LittleFS, load the queue at boot, save it after changes (F-004) | `src/storage.cpp`, `lib/message_queue/src/queue_codec.*` |
-| Time | NTP sync, timezone lookup by IP (F-008) | TBD |
+| Time | NTP sync, timezone lookup by IP (F-008) | `src/clock.cpp`, `lib/clock_logic/` |
 | Battery | Voltage reading and level for the top bar (F-007) | `src/battery.cpp`, `lib/ui_logic/src/battery_level.*` |
 
 `lib/message_queue/` and `lib/ui_logic/` stay hardware-independent so they run in the native test environment (AGENTS.md, Engineering rules).
@@ -207,13 +207,13 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-007 - Top status bar
 
 - **Area:** Display
-- **Status:** In progress (redesigned with battery in 0.0.12; the clock follows in F-008)
+- **Status:** Done (redesigned with battery in 0.0.12, clock since 0.0.13)
 - **Added in version:** 0.0.3
 - **Description:** A bar across the top of the screen shows the IP address, queue position and count, battery, and clock (F-008).
 - **Source files:** `src/screen.cpp` (`drawTopBar`, `drawBatteryIcon`), `src/battery.*`, `lib/ui_logic/src/battery_level.*`, `src/main.cpp` (`statusBar`, `readBatteryIfDue`)
 - **Behavior (since 0.0.12, D-028):**
   - Dark slate bar, 20 px, with rounded slate-grey pills 18 px high, 3 px apart, laid out from the right: clock, battery, queue position; the network pill takes the rest on the left.
-  - Clock pill: `HH:MM`, or `--:--` until the time is known (F-008).
+  - Clock pill: `HH:MM`, or `--:--` until the time is known (F-008, since 0.0.13).
   - Battery pill: an 18 x 9 px battery icon. On battery: fill level, green above 50 %, amber above 20 %, red below. On USB power (reading at or above 4,400 mV): an amber lightning bolt. Before the first reading: empty outline. Read every 10 s, 16 samples averaged (`analogReadMilliVolts` on GPIO34 times 2, ADC_EN high). The percentage comes from a typical Li-ion curve (4,200 mV = 100 %, 3,300 mV = 0 %) and is approximate.
   - Queue pill: amber, `position/count` such as `2/5` (`0/0` when empty) in black, drawn twice one pixel apart for a bold look.
   - Network pill: a 3 px status stripe (green connected, amber connecting or setup, red offline), then the IP address or `connecting` / `no network`. The worst case (`30/30` in the queue pill) still fits the IP address.
@@ -224,12 +224,17 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-008 - Clock with NTP and IP-based timezone
 
 - **Area:** Networking, time
-- **Status:** Planned
-- **Added in version:** not yet implemented
-- **Description:** The device gets the time from NTP and the timezone from a geolocation lookup of its public IP address. The clock shows in the top bar (F-007). This needs internet access, not only the LAN.
-- **Source files:** TBD
-- **Behavior:** TBD: NTP servers, geolocation service, fallback when the lookup fails, resync interval, 12 or 24 hour format.
-- **Verification:** TBD
+- **Status:** Done
+- **Added in version:** 0.0.13
+- **Description:** The device gets the time from NTP and the timezone from a geolocation lookup of its public IP address (D-012, D-029). The clock shows in the top bar (F-007). This needs internet access, not only the LAN.
+- **Source files:** `src/clock.*`, `lib/clock_logic/src/clock_logic.*`, `test/test_clock_logic/test_main.cpp`
+- **Behavior:**
+  - NTP: `configTime` with `pool.ntp.org` and `time.google.com`, started at the first connection; the ESP-IDF SNTP client keeps it synced.
+  - Timezone: `GET http://ip-api.com/json/?fields=status,message,timezone,offset` over plain HTTP/1.0 at the first connection, then every hour; after a failure, every minute. The reply's `offset` is the current UTC offset including daylight saving, so a daylight saving change shows within an hour. Offsets outside -14 h to +14 h are rejected.
+  - Display: 24-hour `HH:MM`; `--:--` until both the NTP time and the offset are known. No fallback to UTC.
+  - A lookup blocks the loop for its duration (about 0.2 s observed; at most 3 s timeout).
+  - Serial: `Clock: timezone <zone>, UTC offset +N s` when the offset changes, `Clock: NTP time received`, `Clock: timezone lookup failed ...`.
+- **Verification:** `pio test -e native`: 5 tests in `test_clock_logic` (reply parsing, failures, HTTP status and body split, time formatting across midnight and negative offsets). On device, 2026-09-23 (0.0.13): `Clock: timezone Europe/Warsaw, UTC offset +7200 s` 0.2 s after connecting, NTP synced 1 s later; the screenshot showed 20:58 while the host clock read 18:58 UTC.
 
 ### F-009 - Welcome screen and IP message
 
@@ -358,6 +363,7 @@ Record decisions that a later change could accidentally undo.
 | D-026 | Text from MCP is converted for the ASCII fonts: common typographic characters are mapped (dashes, curly quotes, ellipsis, arrows, bullets, check marks, non-breaking spaces), other non-ASCII characters become '?', and limits apply after the conversion. | The fonts cover ASCII only, and LLM output often contains typographic characters. Mapping keeps the text readable; the result tells the client what was replaced. | 2026-09-23 |
 | D-027 | The welcome screen shows for 3 s at the first connection after each boot. The IP message has id `ip`, is timed (60 s on screen), and is re-added only at the first connection after boot or when the IP changes. | The user asked for the IP on a welcome screen and as a queued message and left the details open. The id keeps one IP message at most; timed, because the IP is always in the top bar. | 2026-09-23 |
 | D-028 | Top bar: dark slate bar with separate pills (network with status stripe, amber bold queue position, battery icon, clock). Battery as an icon only, a lightning bolt at or above 4,400 mV. Colors are exact RGB332 values. | The user asked for a dark bar, separation between elements, and a bolder queue position further right. Text for the battery and a Wi-Fi icon did not fit next to a full IP address and `30/30`. The 8-bit frame buffer would shift other colors (a 16-bit dark grey becomes olive). | 2026-09-23 |
+| D-029 | Clock: NTP for the time; the current UTC offset from `ip-api.com` over plain HTTP/1.0, refreshed hourly (every minute after a failure); 24-hour format; `--:--` until both are known. | The user asked for NTP time and a timezone based on the IP (D-012). ip-api.com needs no key, and its offset already includes daylight saving, so no timezone database is needed. A hand-written GET instead of HTTPClient saves about 150 KB of flash. | 2026-09-23 |
 
 ## Verification
 
@@ -385,8 +391,8 @@ curl -s -H 'Content-Type: application/json' -H 'Accept: application/json, text/e
 
 Known unknowns and issues found outside the current task. Smaller per-feature details are listed as TBD in each feature entry.
 
-- Timezone: which geolocation service to use, and the fallback when it fails or there is no internet.
-- Memory budget: baseline with 0.0.8 (Wi-Fi, MCP server, and mDNS running): static RAM 85,476 bytes, free heap 159,824 bytes, largest free block 94,196 bytes after boot. Flash: 1,764,553 of 1,966,080 bytes (89.7%); about 200 KB left in the app slot. Re-check as features land.
+- Timezone lookup (D-029): ip-api.com is free for non-commercial use only and answers over plain HTTP; the device's public IP address goes to that service. Daylight saving changes can show up to an hour late. Revisit if the use becomes commercial or the service changes.
+- Memory budget: baseline with 0.0.13 (Wi-Fi, MCP server, mDNS, clock): static RAM 86,832 bytes, free heap 156,724 bytes, largest free block 94,196 bytes after boot. Flash: 1,781,937 of 1,966,080 bytes (90.6%); about 180 KB left in the app slot. Avoid HTTPClient (about 150 KB of TLS code). Re-check as features land.
 - The core's WebServer reads the whole request body into memory before the handler checks the 8 KB limit, so a LAN client sending a very large Content-Length can exhaust the heap. Accepted for now together with D-011 (no authentication on the LAN).
 - Wi-Fi setup path (F-002) not yet tested on the device, because the board already had saved settings. Test by holding both buttons for 5 s, then pairing with the ESP BLE Provisioning app.
 - The board came with saved Wi-Fi settings for `WLAN3` that this project did not write (BOARDS.md Wi-Fi). Unknown origin; confirm it is the intended network.

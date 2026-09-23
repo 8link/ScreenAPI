@@ -6,6 +6,7 @@
 #include <message_queue.h>
 
 #include "battery.h"
+#include "clock.h"
 #include "mcp_server.h"
 #include "network.h"
 #include "pins.h"
@@ -213,7 +214,7 @@ screen::StatusBar statusBar()
         bar.link = screen::Link::Down;
         break;
     }
-    snprintf(bar.clock, sizeof(bar.clock), "--:--");  // clock follows in F-008
+    clock_sync::text(bar.clock, sizeof(bar.clock));
     bar.batteryKnown = batteryKnown;
     bar.externalPower = batteryLevel.external;
     bar.batteryPercent = batteryLevel.percent;
@@ -298,7 +299,9 @@ void loop()
         redraw |= handleButton(event, contentChanged) || contentChanged;
     }
 
-    const mcp_server::Events mcpEvents = mcp_server::poll(network::state() == network::State::Connected);
+    const bool connected = network::state() == network::State::Connected;
+    clock_sync::poll(now, connected);
+    const mcp_server::Events mcpEvents = mcp_server::poll(connected);
     if (mcpEvents.messageDropped) {
         screen::showQueueFullPopup(now);
     }

@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.12
+**Current firmware version:** 0.0.13
 
 ## Format
 
@@ -39,6 +39,31 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.13 - Add clock with NTP and IP-based timezone
+
+**Date:** 2026-09-23 18:59
+**Author:** Claude Opus 5.5
+**Type:** Networking, time
+
+**Summary:**
+The top bar clock shows local time (F-008, D-029): NTP for the time, the current UTC offset from ip-api.com for the public IP, refreshed hourly, 24-hour format.
+
+**Changes:**
+- `src/clock.h`, `.cpp` - New. NTP start, timezone lookup with a plain HTTP/1.0 GET, clock text.
+- `lib/clock_logic/src/clock_logic.h`, `.cpp` - New. ip-api reply parsing, HTTP body split, `HH:MM` formatting.
+- `test/test_clock_logic/test_main.cpp` - New. 5 tests.
+- `src/main.cpp` - Clock polling and top bar text.
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.13`.
+- `PROJECT.md` - F-007 done, F-008; D-029; open questions and memory baseline.
+
+**Verification:**
+- `pio test -e native`: 81 of 81 tests passed.
+- `pio run -e tdisplay` succeeded: RAM 86,832 bytes (26.5%) static, flash 1,781,937 bytes (90.6%). A first version with HTTPClient reached 98.0% flash and was replaced.
+- On device: `Clock: timezone Europe/Warsaw, UTC offset +7200 s`, `Clock: NTP time received`; screenshot shows 20:58 with the host at 18:58 UTC. Free heap 156,724 bytes.
+
+**Git commit:**
+- `v0.0.13 - Add clock with NTP and IP-based timezone`
 
 ## 0.0.12 - Redesign top bar and add battery level
 
