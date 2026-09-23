@@ -32,7 +32,16 @@ Sources: vendor repository https://github.com/Xinyuan-LilyGO/TTGO-T-Display (rea
 - **Flash (size / mode / speed):** 4 MB (W25Q32 on the schematic) / DIO / 40 MHz (PlatformIO board definition)
 - **PSRAM:** none. The vendor README says to select PSRAM Disabled; the schematic has no PSRAM.
 - **USB type:** USB-C via a USB-UART bridge chip; auto-reset through DTR/RTS transistors. The unit in hand has a Silicon Labs CP2104 (USB 10c4:ea60). The bridge chip varies by revision, see Q-001.
-- **Partition scheme:** TBD
+- **Partition scheme:** Arduino default (from the 0.0.6 build, `partitions.bin`):
+
+| Name | Type | SubType | Offset | Size |
+|------|------|---------|--------|------|
+| nvs | data | nvs | 0x9000 | 20K |
+| otadata | data | ota | 0xe000 | 8K |
+| app0 | app | ota_0 | 0x10000 | 1280K |
+| app1 | app | ota_1 | 0x150000 | 1280K |
+| spiffs | data | spiffs | 0x290000 | 1408K (used as LittleFS) |
+| coredump | data | coredump | 0x3f0000 | 64K |
 - **Strapping pins:** GPIO0 (BUTTON2), GPIO2, GPIO5 (TFT_CS), GPIO12, GPIO15. See Q-003.
 
 ### Pin mapping
@@ -111,7 +120,12 @@ None on board.
 ### Storage
 
 - **NVS namespaces:** TBD
-- **Filesystem:** TBD
+- **Filesystem:** LittleFS on the `spiffs` partition (1,441,792 bytes). The partition was blank (all 0xFF, read back on 2026-09-23) and was formatted by firmware 0.0.6 on first boot. Observed with 0.0.6:
+  - The first mount of the blank partition logs `Corrupted dir pair at {0x0, 0x1}` and `mount failed, (-84)`, then formats and mounts. Expected once; harmless.
+  - `LittleFS.exists()` on a missing file logs `open(): ... does not exist, no permits for creation` as an error (arduino-esp32 behavior). Harmless.
+  - `LittleFS.rename()` replaces an existing file; no remove needed.
+  - Writing about 1 KB (temporary file plus rename) takes 65 to 70 ms and blocks the loop for that time.
+  - A fresh file system uses 8,192 bytes; with `/queue.bin` 12,288 bytes.
 - **SD card:** none on board. The vendor factory test shows an external SD card on HSPI: CS 33, SCLK 25, MISO 27, MOSI 26.
 
 ### BLE

@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.5
+**Current firmware version:** 0.0.6
 
 ## Format
 
@@ -39,6 +39,34 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.6 - Save messages across reboots
+
+**Date:** 2026-09-23 17:00
+**Author:** Claude Opus 5.5
+**Type:** Storage
+
+**Summary:**
+Messages survive reboot (F-004, D-009): the queue is saved as `/queue.bin` on LittleFS 1 s after the last change and restored at boot (D-022). Timed messages restart their full duration (D-017). Demo messages are added only when nothing was restored (F-011). The `spiffs` partition was blank and is formatted as LittleFS on first boot; the user approved the format.
+
+**Changes:**
+- `lib/message_queue/src/queue_codec.h`, `.cpp` - New. Versioned binary format with checksum; decode validates everything before changing the queue.
+- `src/storage.h`, `.cpp` - New. Mount (format if needed), load, save through a temporary file and rename.
+- `src/main.cpp` - Load at boot, demo messages only when nothing restored, save 1 s after the last content change (delete, clear all, expiry, demo add); scrolling does not save.
+- `test/test_queue_codec/test_main.cpp` - New. 7 tests.
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.6`.
+- `PROJECT.md` - F-004 done, F-011, storage section, modules, D-022, memory baseline; persistence open question closed.
+- `BOARDS.md` - Partition table; LittleFS findings (first-mount log, exists() log, rename, write time).
+
+**Verification:**
+- `pio test -e native`: 52 of 52 tests passed.
+- `pio run -e tdisplay` succeeded: RAM 44,652 bytes (13.6%) static, flash 357,929 bytes (27.3%). No new warnings.
+- Before flashing: read back the whole `spiffs` partition; all bytes 0xFF.
+- Boot 1: formatted, `Restored 0 messages`, 5 demo messages saved (1,030 bytes, 65 ms); expiry at 32.5 s, 4 saved (939 bytes, 70 ms).
+- Boot 2 (reset): `Restored 4 messages`, no demo messages added. Same result after reflashing with the scroll-save fix.
+
+**Git commit:**
+- `v0.0.6 - Save messages across reboots`
 
 ## 0.0.5 - Add inline text colors and move countdown right
 

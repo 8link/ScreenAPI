@@ -43,6 +43,7 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 | UI logic | Word wrap, auto-scroll timing, button debounce and long press; hardware-independent (F-005, F-006) | `lib/ui_logic/` |
 | Buttons | Reading the pins and acting on button events (F-006) | `src/main.cpp` |
 | Main loop | Buttons, expiry, screen update; demo messages (F-011) | `src/main.cpp` |
+| Storage | Mount LittleFS, load the queue at boot, save it after changes (F-004) | `src/storage.cpp`, `lib/message_queue/src/queue_codec.*` |
 | Time | NTP sync, timezone lookup by IP (F-008) | TBD |
 | Battery | Voltage reading for the top bar (F-007) | TBD |
 
@@ -130,12 +131,12 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-004 - Message queue and lifecycle
 
 - **Area:** Core logic
-- **Status:** In progress (queue logic in 0.0.2, used by the firmware since 0.0.3; persistence pending)
+- **Status:** Done (queue logic in 0.0.2, used by the firmware since 0.0.3, persistence since 0.0.6)
 - **Added in version:** 0.0.2
 - **Description:** The device owns message queuing, display order, and lifecycle. Two message kinds:
   - Time-driven: removed automatically when its time on screen runs out (D-020).
   - Confirm-required: stays until the user deletes it with the delete button.
-- **Source files:** `lib/message_queue/src/message_queue.h`, `lib/message_queue/src/message_queue.cpp`, `test/test_message_queue/test_main.cpp`
+- **Source files:** `lib/message_queue/src/message_queue.*`, `lib/message_queue/src/queue_codec.*`, `src/storage.*`, `test/test_message_queue/test_main.cpp`, `test/test_queue_codec/test_main.cpp`
 - **Behavior:**
   - Capacity: 30 messages (D-008). Fixed slots, no heap: 608 bytes per message, 18,264 bytes for the whole queue on the ESP32 (measured with the xtensa toolchain, 0.0.4).
   - Validation (D-016): value required; id up to 16, title up to 64, value up to 512 characters; valid font size, color, and kind; time-driven duration 1 to 86400 seconds. Invalid input is rejected, not truncated. Confirm-required messages ignore the duration.
@@ -146,8 +147,8 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Delete: removes the shown message of either kind, then shows the next older one (wrapping to the newest). Clear all removes every message (F-006).
   - Countdown (D-020): a time-driven message keeps its remaining time and counts down only while it is the shown message. `tick(now)` charges the time since the previous tick to the shown message and removes it when its time runs out; the next older message is then shown. Messages not on screen keep their remaining time. Replacing a message by id starts the new duration. When other messages are removed, the cursor stays on the message being shown.
   - Time is passed to `tick()` in milliseconds as a 64-bit value; the first call only sets the starting point, so time before the first tick (boot) is not counted. The firmware must use a 64-bit uptime clock, not the 32-bit `millis()`, which wraps after about 49.7 days.
-  - Persistence (D-009, D-017), planned: messages survive reboot; time-driven messages restart their full duration after a reboot. Storage medium and write strategy TBD.
-- **Verification:** `pio test -e native`: 22 unit tests covering validation, limits, order, scroll, full queue, replace by id, delete, clear, and the shown-only countdown with expiry. On device (0.0.4, 2026-09-23): with the user scrolling away and back, the 30 s message expired after exactly 30 s of time on screen (serial log, within 20 ms).
+  - Persistence (D-009, D-017, D-022): the queue is saved to `/queue.bin` on LittleFS 1 s after the last content change (add, delete, clear all, expiry; scrolling does not save) and restored at boot in the same order, showing the newest message. Time-driven messages restart their full duration. Remaining time and the scroll position are not saved. A missing, corrupt, or unknown-version file is ignored and the queue starts empty.
+- **Verification:** `pio test -e native`: 22 unit tests covering validation, limits, order, scroll, full queue, replace by id, delete, clear, and the shown-only countdown with expiry. On device (0.0.4, 2026-09-23): with the user scrolling away and back, the 30 s message expired after exactly 30 s of time on screen (serial log, within 20 ms). `test_queue_codec`: 7 tests for the saved format (round trip, restart of durations, maximum size, bad data). On device (0.0.6, 2026-09-23): 5 messages saved (1,030 bytes, 65 ms); after an expiry 4 saved (939 bytes, 70 ms); after a reset `Restored 4 messages`.
 
 ### F-005 - Message screen and rendering
 
@@ -232,7 +233,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Added in version:** 0.0.3
 - **Description:** Five sample messages added at boot so the message screen, scrolling, buttons, and expiry can be tried before MCP exists.
 - **Source files:** `src/main.cpp` (`addDemoMessages`)
-- **Behavior:** Shown first: a large-font message with inline green and red parts and 30 s on screen. Then: a confirm message with a title and value long enough to scroll both ways; a small-font confirm message showing inline colors and an unknown tag; a red large-font confirm message long enough to scroll; a white message with 60 s on screen. Serial prints `Queue: 5 messages` and the free heap after boot.
+- **Behavior:** Shown first: a large-font message with inline green and red parts and 30 s on screen. Then: a confirm message with a title and value long enough to scroll both ways; a small-font confirm message showing inline colors and an unknown tag; a red large-font confirm message long enough to scroll; a white message with 60 s on screen. Serial prints `Queue: 5 messages` and the free heap after boot. Since 0.0.6 the demo messages are added only when nothing was restored (first boot, or an empty queue was saved).
 - **Verification:** On device, 2026-09-23 (0.0.5): serial shows `Queue: 5 messages` at 2.3 s; the first message expired after 30 s on screen, at 32.3 s.
 
 <!-- Template for new entries:
@@ -274,9 +275,9 @@ Station mode on the local network, IP from DHCP (F-002). Credentials are never c
 ### Storage
 
 - **NVS keys:** TBD (Wi-Fi credentials from provisioning)
-- **Message persistence:** up to 30 messages survive reboot (F-004); time-driven messages restart their full duration (D-017). Medium (NVS or LittleFS) TBD.
-- **Filesystem:** TBD
-- **Partitions:** TBD
+- **Message persistence:** up to 30 messages survive reboot (F-004); time-driven messages restart their full duration (D-017).
+- **Filesystem:** LittleFS on the `spiffs` data partition, mounted at `/littlefs` (D-022). Files: `/queue.bin` (saved queue, format in `lib/message_queue/src/queue_codec.h`), `/queue.tmp` (written, then renamed over `/queue.bin`).
+- **Partitions:** Arduino default table, see BOARDS.md MCU, Partition scheme. NVS (20 KB) is too small for a full queue (up to 18,098 bytes encoded).
 
 ### Power
 
@@ -313,6 +314,7 @@ Record decisions that a later change could accidentally undo.
 | D-019 | The screen is drawn into one full-screen 8-bit sprite (240 x 135, 32,400 bytes) and pushed at once. | Flicker-free redraws (AGENTS.md). 8-bit halves the RAM of a 16-bit buffer, and the four text colors and greys survive the reduction. | 2026-09-22 |
 | D-020 | A time-driven message counts down only while it is on screen. Its remaining time shows in a small box at the bottom right (moved from bottom left in 0.0.5). | User decision. | 2026-09-23 |
 | D-021 | Inline color tags in the value: `{white}`, `{blue}`, `{green}`, `{red}`, and `{/}` back to the message color. Unknown tags are shown as written; there is no nesting and no escape. Only the value takes tags; the title keeps its fixed style (D-004). | The user asked for parts of the text in different colors and left the syntax open. Short tags are easy for an LLM to write, and leaving unknown braces alone keeps code and JSON readable. | 2026-09-23 |
+| D-022 | Messages are saved as one file on LittleFS in the `spiffs` partition, written to a temporary file and renamed, 1 s after the last change. The firmware formats the partition if it has no file system. | NVS is 20 KB, too small for a full queue next to Wi-Fi credentials. Rename is atomic, so a power cut leaves the old or the new file. The delay turns a burst of changes into one write. Formatting was approved by the user; the partition was blank when checked. | 2026-09-23 |
 
 ## Verification
 
@@ -331,8 +333,7 @@ pio test -e <env>                    # on-device tests
 Known unknowns and issues found outside the current task. Smaller per-feature details are listed as TBD in each feature entry.
 
 - MCP: transport and protocol version, tool names, field names.
-- Persistence: storage medium (NVS or LittleFS) and how often it writes, to limit flash wear.
 - Timezone: which geolocation service to use, and the fallback when it fails or there is no internet.
-- Memory budget: BLE provisioning, Wi-Fi, and an HTTP MCP server still have to fit on an ESP32 without PSRAM. Baseline with 0.0.3 (queue 18,488 bytes, 8-bit screen buffer 32,400 bytes): free heap 295,564 bytes, largest free block 110,580 bytes after boot. Re-check as each feature lands.
+- Memory budget: BLE provisioning, Wi-Fi, and an HTTP MCP server still have to fit on an ESP32 without PSRAM. Baseline with 0.0.6 (queue 18,264 bytes, 8-bit screen buffer 32,400 bytes, LittleFS mounted): free heap 291,892 bytes, largest free block 110,580 bytes after boot. Re-check as each feature lands.
 - Character set: the built-in TFT_eSPI fonts cover ASCII only. How non-ASCII text (accents, emoji) from MCP clients is handled is TBD (F-003, F-005). Newlines are supported since 0.0.3.
 - `esp_app_desc` does not carry FW_VERSION. The built image reports project name `arduino-lib-builder` and app version `esp-idf: v4.4.7 38eeba213a`, from the precompiled Arduino core. This does not meet the AGENTS.md rule that esp_app_desc reads FW_VERSION. Options (override the descriptor, or accept it for the Arduino framework) TBD.
