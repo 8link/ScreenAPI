@@ -1,3 +1,4 @@
+#include <battery_level.h>
 #include <button_pair.h>
 #include <button_tracker.h>
 #include <countdown.h>
@@ -326,6 +327,25 @@ static void test_pair_release_settling_after_a_long_pause()
     TEST_ASSERT_EQUAL(PairEvent::None, pair.update(false, false, now));
 }
 
+static void test_battery_level_external_power()
+{
+    TEST_ASSERT_TRUE(batteryLevel(4765).external);
+    TEST_ASSERT_TRUE(batteryLevel(kExternalPowerMv).external);
+    TEST_ASSERT_FALSE(batteryLevel(kExternalPowerMv - 1).external);
+}
+
+static void test_battery_level_curve()
+{
+    TEST_ASSERT_EQUAL(100, batteryLevel(4300).percent);
+    TEST_ASSERT_EQUAL(100, batteryLevel(4200).percent);
+    TEST_ASSERT_EQUAL(95, batteryLevel(4150).percent);
+    TEST_ASSERT_EQUAL(62, batteryLevel(3900).percent);
+    TEST_ASSERT_EQUAL(31, batteryLevel(3750).percent);
+    TEST_ASSERT_EQUAL(0, batteryLevel(3300).percent);
+    TEST_ASSERT_EQUAL(0, batteryLevel(2000).percent);
+    TEST_ASSERT_EQUAL(0, batteryLevel(0).percent);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -357,5 +377,7 @@ int main()
     RUN_TEST(test_pair_short_both_press_reports_nothing);
     RUN_TEST(test_pair_staggered_release_reports_nothing);
     RUN_TEST(test_pair_release_settling_after_a_long_pause);
+    RUN_TEST(test_battery_level_external_power);
+    RUN_TEST(test_battery_level_curve);
     return UNITY_END();
 }

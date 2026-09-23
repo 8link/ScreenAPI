@@ -83,6 +83,7 @@ Reserved and unusable pins:
 ### Power
 
 - **Input:** USB-C 5 V. 3.3 V from an AP2112K-3.3 LDO (schematic).
+- **Battery sense on USB power:** 4,765 mV (16-sample average of `analogReadMilliVolts` on GPIO34 times 2, ADC_EN high), steady; 2026-09-23, unit in hand on USB, battery presence not checked (probably none). Above a Li-ion cell's 4.2 V, so the firmware treats readings at or above 4,400 mV as USB power (PROJECT.md D-028). Reading with a battery attached, and while charging: not yet measured.
 - **Battery chemistry:** single-cell Li-ion / LiPo, 3.7 to 4.2 V (schematic connector label)
 - **Battery capacity:** TBD (none supplied with the board)
 - **Charge IC:** TP4054 (schematic), red charge LED

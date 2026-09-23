@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.11
+**Current firmware version:** 0.0.12
 
 ## Format
 
@@ -39,6 +39,33 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.12 - Redesign top bar and add battery level
+
+**Date:** 2026-09-23 18:59
+**Author:** Claude Opus 5.5
+**Type:** Display, power
+
+**Summary:**
+Top bar redesigned (F-007, D-028): dark slate bar with separate pills; the queue position moved right into a bold amber pill; the network pill has a connection status stripe. Battery level from GPIO34 shown as an icon, with a lightning bolt on USB power.
+
+**Changes:**
+- `src/screen.h`, `.cpp` - `StatusBar` for the top bar contents; new bar drawing, battery icon, status stripe; bar 20 px, title and value moved down 2 px.
+- `src/battery.h`, `.cpp` - New. ADC_EN high, averaged calibrated reading times 2.
+- `lib/ui_logic/src/battery_level.h`, `.cpp` - New. USB detection and Li-ion curve.
+- `src/main.cpp` - Status bar contents, battery reading every 10 s, serial command `B`.
+- `test/test_ui_logic/test_main.cpp` - 2 battery level tests (30 total).
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.12`.
+- `PROJECT.md` - F-007, screen layout, modules; D-028.
+- `BOARDS.md` - Battery sense reading on USB power.
+
+**Verification:**
+- `pio test -e native`: 76 of 76 tests passed.
+- `pio run -e tdisplay` succeeded: RAM 85,732 bytes (26.2%) static, flash 1,773,597 bytes (90.2%).
+- On device: screenshots of the bar (a first version with battery text did not leave room for the IP address with a long queue position, so the battery became icon-only); `B` reads 4,765 mV on USB.
+
+**Git commit:**
+- `v0.0.12 - Redesign top bar and add battery level`
 
 ## 0.0.11 - Add screenshot over serial
 

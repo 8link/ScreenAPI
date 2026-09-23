@@ -16,10 +16,10 @@ namespace {
 constexpr int kWidth = 240;
 constexpr int kHeight = 135;
 constexpr int kMargin = 4;
-constexpr int kBarHeight = 18;
-constexpr int kTitleTop = 21;
+constexpr int kBarHeight = 20;
+constexpr int kTitleTop = 23;
 constexpr int kTitleHeight = 16;
-constexpr int kValueTop = 41;
+constexpr int kValueTop = 43;
 constexpr int kValueHeight = kHeight - kValueTop;
 constexpr int kTextWidth = kWidth - 2 * kMargin;
 constexpr int kCountdownHeight = 20;
@@ -37,6 +37,15 @@ constexpr uint32_t kFrameMs = 33;
 constexpr uint32_t kPopupMs = 3000;
 
 constexpr uint16_t kBlue = 0x4C9F;  // lighter than TFT_BLUE, which is hard to read on black
+
+// Top bar colors (D-028), chosen to survive the 8-bit frame buffer unchanged:
+// each is the exact RGB565 form of an RGB332 color.
+constexpr uint16_t kBarBackground = 0x210A;  // dark slate (36, 36, 85)
+constexpr uint16_t kPillBackground = 0x420A;  // slate grey (73, 73, 85)
+constexpr uint16_t kQueueAccent = 0xDC80;     // amber (219, 146, 0)
+constexpr int kPillHeight = 18;
+constexpr int kPillGap = 3;
+constexpr int kPillPadding = 4;
 
 // Markup tag names in mq::Color order (D-021).
 const char* const kColorNames[] = {"white", "blue", "green", "red"};
@@ -71,7 +80,8 @@ ui::Line lines[kMaxLines];
 char lineBuffer[mq::kValueMaxLen + 1];
 uint64_t lastFrameMs = 0;
 int32_t lastCountdownS = -1;  // -1: no countdown on screen
-char lastNetworkLabel[24] = "";
+StatusBar lastBar;
+bool lastBarValid = false;
 uint64_t popupUntilMs = 0;
 bool popupShown = false;
 
@@ -206,21 +216,93 @@ void drawEmpty()
     frame.drawString("No messages", kWidth / 2, kValueTop + kValueHeight / 2, kSmallFont);
 }
 
-// Battery and clock are placeholders until the battery reading and F-008 exist.
-void drawTopBar(const mq::MessageQueue& queue, const char* networkLabel)
+// Rounded background for one top bar element.
+void drawPill(int x, int width, uint16_t color)
 {
+    frame.fillRoundRect(x, 1, width, kPillHeight, 4, color);
+}
+
+// Battery outline, 18 x 9 px. On battery: a fill level, green above 50 %, amber
+// above 20 %, red below. On USB power: an amber lightning bolt. Unknown: empty.
+void drawBatteryIcon(int x, const StatusBar& bar)
+{
+    constexpr int kBodyWidth = 16;
+    constexpr int kBodyHeight = 9;
+    const int y = 1 + (kPillHeight - kBodyHeight) / 2;
+    frame.drawRect(x, y, kBodyWidth, kBodyHeight, TFT_LIGHTGREY);
+    frame.fillRect(x + kBodyWidth, y + 3, 2, kBodyHeight - 6, TFT_LIGHTGREY);
+    if (!bar.batteryKnown) {
+        return;
+    }
+    if (bar.externalPower) {
+        const int cx = x + kBodyWidth / 2;
+        frame.drawLine(cx + 2, y + 1, cx - 2, y + 4, kQueueAccent);
+        frame.drawLine(cx - 2, y + 4, cx + 2, y + 4, kQueueAccent);
+        frame.drawLine(cx + 2, y + 4, cx - 2, y + 7, kQueueAccent);
+        return;
+    }
+    const uint16_t fill = bar.batteryPercent > 50 ? TFT_GREEN : bar.batteryPercent > 20 ? kQueueAccent : TFT_RED;
+    const int fillWidth = (kBodyWidth - 4) * bar.batteryPercent / 100;
+    if (fillWidth > 0) {
+        frame.fillRect(x + 2, y + 2, fillWidth, kBodyHeight - 4, fill);
+    }
+}
+
+uint16_t linkColor(Link link)
+{
+    switch (link) {
+    case Link::Up:
+        return TFT_GREEN;
+    case Link::Pending:
+        return kQueueAccent;
+    case Link::Down:
+        break;
+    }
+    return TFT_RED;
+}
+
+// Dark bar with separate pills, laid out right to left: clock, battery icon,
+// queue position (amber, bold), then the network pill fills the space on the
+// left, with a status stripe on its left edge (D-028).
+void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
+{
+    constexpr int kCenterY = 1 + kPillHeight / 2;
+    frame.fillRect(0, 0, kWidth, kBarHeight, kBarBackground);
+
+    // Clock
+    const int clockWidth = frame.textWidth("88:88", kBarFont) + 2 * kPillPadding;
+    const int clockX = kWidth - 2 - clockWidth;
+    drawPill(clockX, clockWidth, kPillBackground);
+    frame.setTextColor(TFT_WHITE);
+    frame.setTextDatum(MC_DATUM);
+    frame.drawString(bar.clock, clockX + clockWidth / 2, kCenterY, kBarFont);
+
+    // Battery
+    constexpr int kIconWidth = 18;
+    const int batteryWidth = kIconWidth + 2 * kPillPadding;
+    const int batteryX = clockX - kPillGap - batteryWidth;
+    drawPill(batteryX, batteryWidth, kPillBackground);
+    drawBatteryIcon(batteryX + kPillPadding, bar);
+
+    // Queue position: amber pill, black text drawn twice one pixel apart for a bold look
     char position[12];
     const size_t current = queue.empty() ? 0 : queue.cursor() + 1;
     snprintf(position, sizeof(position), "%u/%u", static_cast<unsigned>(current), static_cast<unsigned>(queue.size()));
+    const int queueWidth = frame.textWidth(position, kBarFont) + 1 + 2 * kPillPadding;
+    const int queueX = batteryX - kPillGap - queueWidth;
+    drawPill(queueX, queueWidth, kQueueAccent);
+    frame.setTextColor(TFT_BLACK);
+    frame.drawString(position, queueX + queueWidth / 2, kCenterY, kBarFont);
+    frame.drawString(position, queueX + queueWidth / 2 + 1, kCenterY, kBarFont);
 
+    // Network: status stripe, then the label in the remaining space
+    constexpr int kStripeWidth = 3;
+    const int networkWidth = queueX - kPillGap - 2;
+    drawPill(2, networkWidth, kPillBackground);
+    frame.fillRect(2 + 2, 4, kStripeWidth, kPillHeight - 6, linkColor(bar.link));
     frame.setTextColor(TFT_LIGHTGREY);
-    frame.setTextDatum(TL_DATUM);
-    frame.drawString(networkLabel, kMargin, 1, kBarFont);
-    frame.setTextDatum(TC_DATUM);
-    frame.drawString(position, kWidth / 2, 1, kBarFont);
-    frame.setTextDatum(TR_DATUM);
-    frame.drawString("--%  --:--", kWidth - kMargin, 1, kBarFont);
-    frame.drawFastHLine(0, kBarHeight, kWidth, TFT_DARKGREY);
+    frame.setTextDatum(ML_DATUM);
+    frame.drawString(bar.network, 2 + 2 + kStripeWidth + 3, kCenterY, kBarFont);
 }
 
 void drawTitle(uint64_t elapsedMs)
@@ -249,7 +331,7 @@ void drawQueueFullPopup()
 }
 
 void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t countdownS, uint64_t nowMs,
-            const char* networkLabel, bool popup)
+            const StatusBar& bar, bool popup)
 {
     frame.fillSprite(TFT_BLACK);
     if (message != nullptr) {
@@ -262,7 +344,7 @@ void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t c
     }
     // The value scrolls under the header, so clear the header area before drawing it.
     frame.fillRect(0, 0, kWidth, kValueTop, TFT_BLACK);
-    drawTopBar(queue, networkLabel);
+    drawTopBar(queue, bar);
     if (message != nullptr) {
         drawTitle(nowMs - shown.sinceMs);
     }
@@ -323,7 +405,7 @@ void showBootScreen()
     tft.drawString("v" FW_VERSION, kWidth / 2, kHeight / 2 + 16, 2);
 }
 
-void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const char* networkLabel)
+void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const StatusBar& bar)
 {
     const mq::Message* message = queue.current();
     const bool relayout = message != nullptr ? !isShown(*message) : shown.valid;
@@ -337,17 +419,20 @@ void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, co
 
     const int32_t countdownS = countdownFor(message);
     const bool frameDue = isScrolling() && nowMs - lastFrameMs >= kFrameMs;
-    const bool labelChanged = strcmp(networkLabel, lastNetworkLabel) != 0;
+    const bool barChanged = !lastBarValid || strcmp(bar.network, lastBar.network) != 0 || bar.link != lastBar.link ||
+                            strcmp(bar.clock, lastBar.clock) != 0 || bar.batteryKnown != lastBar.batteryKnown ||
+                            bar.externalPower != lastBar.externalPower || bar.batteryPercent != lastBar.batteryPercent;
     const bool popup = nowMs < popupUntilMs;
-    if (!queueChanged && !relayout && !frameDue && countdownS == lastCountdownS && !labelChanged &&
+    if (!queueChanged && !relayout && !frameDue && countdownS == lastCountdownS && !barChanged &&
         popup == popupShown) {
         return;
     }
-    render(queue, message, countdownS, nowMs, networkLabel, popup);
+    render(queue, message, countdownS, nowMs, bar, popup);
     popupShown = popup;
     lastFrameMs = nowMs;
     lastCountdownS = countdownS;
-    snprintf(lastNetworkLabel, sizeof(lastNetworkLabel), "%s", networkLabel);
+    lastBar = bar;
+    lastBarValid = true;
 }
 
 void showSetup(const char* qrPayload, const char* serviceName, const char* pop, const char* status, uint16_t statusColor)

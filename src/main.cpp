@@ -1,9 +1,11 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <battery_level.h>
 #include <button_pair.h>
 #include <esp_timer.h>
 #include <message_queue.h>
 
+#include "battery.h"
 #include "mcp_server.h"
 #include "network.h"
 #include "pins.h"
@@ -19,6 +21,7 @@ constexpr uint32_t kSaveDelayMs = 1000;  // one flash write for a burst of chang
 constexpr uint32_t kWifiResetHoldMs = 5000;  // hold both buttons this long to forget Wi-Fi
 constexpr uint32_t kWelcomeMs = 3000;
 constexpr uint32_t kIpMessageS = 60;  // on-screen time of the IP message (D-027)
+constexpr uint32_t kBatteryReadMs = 10000;
 
 mq::MessageQueue queue;
 ui::ButtonPair buttons(kDebounceMs, kLongPressMs, kWifiResetHoldMs);  // first: delete, second: scroll
@@ -33,6 +36,9 @@ network::State lastState = network::State::Connecting;
 bool welcomeDone = false;
 uint64_t welcomeUntilMs = 0;
 char announcedIp[16] = "";
+ui::BatteryLevel batteryLevel{false, 0};
+bool batteryKnown = false;
+uint64_t lastBatteryReadMs = 0;
 
 // 64-bit uptime; millis() is 32-bit and wraps after about 49.7 days.
 uint64_t nowMs()
@@ -172,10 +178,46 @@ bool announceConnection(uint64_t now)
 void handleSerialCommands()
 {
     while (Serial.available() > 0) {
-        if (Serial.read() == 'S') {
+        const int command = Serial.read();
+        if (command == 'S') {
             screen::sendScreenshot(Serial);
+        } else if (command == 'B') {
+            Serial.printf("Battery: %u mV\n", static_cast<unsigned>(battery::readMillivolts()));
         }
     }
+}
+
+void readBatteryIfDue(uint64_t now)
+{
+    if (batteryKnown && now - lastBatteryReadMs < kBatteryReadMs) {
+        return;
+    }
+    lastBatteryReadMs = now;
+    batteryLevel = ui::batteryLevel(battery::readMillivolts());
+    batteryKnown = true;
+}
+
+screen::StatusBar statusBar()
+{
+    screen::StatusBar bar;
+    network::label(bar.network, sizeof(bar.network));
+    switch (network::state()) {
+    case network::State::Connected:
+        bar.link = screen::Link::Up;
+        break;
+    case network::State::Connecting:
+    case network::State::Setup:
+        bar.link = screen::Link::Pending;
+        break;
+    case network::State::Offline:
+        bar.link = screen::Link::Down;
+        break;
+    }
+    snprintf(bar.clock, sizeof(bar.clock), "--:--");  // clock follows in F-008
+    bar.batteryKnown = batteryKnown;
+    bar.externalPower = batteryLevel.external;
+    bar.batteryPercent = batteryLevel.percent;
+    return bar;
 }
 
 void scheduleSave(uint64_t now)
@@ -206,6 +248,7 @@ void setup()
     // GPIO35 is input-only and has no internal pull-up; the board provides an external one.
     pinMode(PIN_BUTTON_DELETE, INPUT);
     pinMode(PIN_BUTTON_SCROLL, INPUT_PULLUP);
+    battery::begin();
 
     if (!screen::begin()) {
         Serial.println("Screen buffer allocation failed");
@@ -271,9 +314,8 @@ void loop()
     if (!covered) {
         redraw |= coverShown;
         coverShown = false;
-        char networkLabel[24];
-        network::label(networkLabel, sizeof(networkLabel));
-        screen::update(queue, now, redraw, networkLabel);
+        readBatteryIfDue(now);
+        screen::update(queue, now, redraw, statusBar());
     }
     delay(5);
 }

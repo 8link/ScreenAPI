@@ -46,7 +46,7 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 | Main loop | Buttons, expiry, MCP events, connection announcement, screen update | `src/main.cpp` |
 | Storage | Mount LittleFS, load the queue at boot, save it after changes (F-004) | `src/storage.cpp`, `lib/message_queue/src/queue_codec.*` |
 | Time | NTP sync, timezone lookup by IP (F-008) | TBD |
-| Battery | Voltage reading for the top bar (F-007) | TBD |
+| Battery | Voltage reading and level for the top bar (F-007) | `src/battery.cpp`, `lib/ui_logic/src/battery_level.*` |
 
 `lib/message_queue/` and `lib/ui_logic/` stay hardware-independent so they run in the native test environment (AGENTS.md, Engineering rules).
 
@@ -65,9 +65,9 @@ Landscape (rotation 1), 240 x 135 pixels, black background. Implemented in `src/
 
 | Area | Rows (y) | Content |
 |------|----------|---------|
-| Top bar | 0 to 17, line at 18 | IP (left), position / count such as `2/5` (center), battery and clock (right); font 2, light grey (F-007) |
-| Title | 21 to 36, line at 39 | Message title, font 2, light grey; scrolls horizontally when wider than 232 px (F-005) |
-| Value | 41 to 134 (94 px) | Message value in the sender's font and color, word-wrapped to 232 px; scrolls vertically when taller than the area (F-005) |
+| Top bar | 0 to 19 | Dark bar with pills, right to left: clock, battery icon, queue position (amber, bold), network with status stripe (F-007, D-028) |
+| Title | 23 to 38, line at 41 | Message title, font 2, light grey; scrolls horizontally when wider than 232 px (F-005) |
+| Value | 43 to 134 (92 px) | Message value in the sender's font and color, word-wrapped to 232 px; scrolls vertically when taller than the area (F-005) |
 
 Left and right margins are 4 px.
 
@@ -178,7 +178,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Colors: white, blue (0x4C9F, lighter than TFT_BLUE for readability on black), green, red.
   - Inline colors (D-021, since 0.0.5): `{white}`, `{blue}`, `{green}`, `{red}` switch the color of the following text; `{/}` returns to the message color. Other text in braces is shown as written. Tags are removed before wrapping, so they take no space on screen.
   - Word wrap at spaces; a word wider than the line is broken; `\n` starts a new line.
-  - Auto-scroll (D-018): a title wider than 232 px scrolls horizontally at 40 px/s; a value taller than 94 px scrolls vertically at 20 px/s. Each pauses 1.5 s at the start, moves to the end, pauses 1.5 s, then jumps back. Scrolling restarts only when the shown text or font changes.
+  - Auto-scroll (D-018): a title wider than 232 px scrolls horizontally at 40 px/s; a value taller than 92 px (94 px before 0.0.12) scrolls vertically at 20 px/s. Each pauses 1.5 s at the start, moves to the end, pauses 1.5 s, then jumps back. Scrolling restarts only when the shown text or font changes.
   - Countdown box (D-020): a time-driven message shows its remaining time in a small bordered box at the bottom right of the value area (bottom left in 0.0.4), over the value text: `45s`, `4:05`, or `1:02:03`, rounded up so it never shows 0. Font 2, light grey on black, dark grey border. The screen redraws when the shown number changes.
   - Empty queue: "No messages" centered in the value area.
   - Rendering (D-019): each frame is drawn into one full-screen 8-bit sprite and pushed at once. Redraws happen on queue changes and every 33 ms only while something scrolls.
@@ -207,12 +207,19 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-007 - Top status bar
 
 - **Area:** Display
-- **Status:** In progress (layout and queue position in 0.0.3)
+- **Status:** In progress (redesigned with battery in 0.0.12; the clock follows in F-008)
 - **Added in version:** 0.0.3
-- **Description:** A bar across the top of the screen shows the IP address, queue depth, battery, and clock (F-008).
-- **Source files:** `src/screen.cpp`
-- **Behavior:** Center shows the shown message's position and the queue count, such as `2/5` (`0/0` when empty). Left: the IP address when connected, otherwise `connecting` or `no network` (since 0.0.7). Battery (`--%`) and clock (`--:--`) are placeholders until the battery reading and F-008 exist. TBD: battery format (voltage, percent, or icon) and what shows on USB power without a battery, what shows before Wi-Fi connects and before the clock is set, update intervals.
-- **Verification:** TBD
+- **Description:** A bar across the top of the screen shows the IP address, queue position and count, battery, and clock (F-008).
+- **Source files:** `src/screen.cpp` (`drawTopBar`, `drawBatteryIcon`), `src/battery.*`, `lib/ui_logic/src/battery_level.*`, `src/main.cpp` (`statusBar`, `readBatteryIfDue`)
+- **Behavior (since 0.0.12, D-028):**
+  - Dark slate bar, 20 px, with rounded slate-grey pills 18 px high, 3 px apart, laid out from the right: clock, battery, queue position; the network pill takes the rest on the left.
+  - Clock pill: `HH:MM`, or `--:--` until the time is known (F-008).
+  - Battery pill: an 18 x 9 px battery icon. On battery: fill level, green above 50 %, amber above 20 %, red below. On USB power (reading at or above 4,400 mV): an amber lightning bolt. Before the first reading: empty outline. Read every 10 s, 16 samples averaged (`analogReadMilliVolts` on GPIO34 times 2, ADC_EN high). The percentage comes from a typical Li-ion curve (4,200 mV = 100 %, 3,300 mV = 0 %) and is approximate.
+  - Queue pill: amber, `position/count` such as `2/5` (`0/0` when empty) in black, drawn twice one pixel apart for a bold look.
+  - Network pill: a 3 px status stripe (green connected, amber connecting or setup, red offline), then the IP address or `connecting` / `no network`. The worst case (`30/30` in the queue pill) still fits the IP address.
+  - Before 0.0.12: plain text on black, IP left, position centered, `--%` and `--:--` right.
+  - Serial command `B` prints the battery voltage.
+- **Verification:** `pio test -e native` covers the battery level mapping. On device, 2026-09-23 (0.0.12): screenshot shows the bar as described with the USB lightning bolt; `B` reads 4,765 mV on USB power.
 
 ### F-008 - Clock with NTP and IP-based timezone
 
@@ -350,6 +357,7 @@ Record decisions that a later change could accidentally undo.
 | D-025 | MCP over Streamable HTTP without streaming or sessions: one JSON response per POST at `/mcp` on port 80, plus the mDNS name `screenapi.local`. Requests with a foreign `Origin` header are rejected. Tools: `show_message` and `queue_status`. | User approved the proposal. JSON-only responses keep the firmware small and work with Claude Code; the Origin check is required by the MCP spec; mDNS keeps the client setting valid when the DHCP address changes. | 2026-09-23 |
 | D-026 | Text from MCP is converted for the ASCII fonts: common typographic characters are mapped (dashes, curly quotes, ellipsis, arrows, bullets, check marks, non-breaking spaces), other non-ASCII characters become '?', and limits apply after the conversion. | The fonts cover ASCII only, and LLM output often contains typographic characters. Mapping keeps the text readable; the result tells the client what was replaced. | 2026-09-23 |
 | D-027 | The welcome screen shows for 3 s at the first connection after each boot. The IP message has id `ip`, is timed (60 s on screen), and is re-added only at the first connection after boot or when the IP changes. | The user asked for the IP on a welcome screen and as a queued message and left the details open. The id keeps one IP message at most; timed, because the IP is always in the top bar. | 2026-09-23 |
+| D-028 | Top bar: dark slate bar with separate pills (network with status stripe, amber bold queue position, battery icon, clock). Battery as an icon only, a lightning bolt at or above 4,400 mV. Colors are exact RGB332 values. | The user asked for a dark bar, separation between elements, and a bolder queue position further right. Text for the battery and a Wi-Fi icon did not fit next to a full IP address and `30/30`. The 8-bit frame buffer would shift other colors (a 16-bit dark grey becomes olive). | 2026-09-23 |
 
 ## Verification
 

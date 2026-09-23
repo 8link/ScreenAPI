@@ -9,6 +9,18 @@
 
 namespace screen {
 
+enum class Link { Up, Pending, Down };
+
+// Contents of the top bar (F-007).
+struct StatusBar {
+    char network[24];    // IP address or a short status
+    Link link;           // colors the network pill's status stripe
+    char clock[8];       // "18:27", or "--:--" before the time is known
+    bool batteryKnown;   // false until the first reading
+    bool externalPower;  // on USB power: lightning bolt instead of a level
+    int batteryPercent;  // 0..100
+};
+
 // Initializes the panel and the off-screen buffer. Returns false if the
 // buffer could not be allocated.
 bool begin();
@@ -16,9 +28,9 @@ bool begin();
 void showBootScreen();
 
 // Message screen. Redraws when the queue changed, text is scrolling, the
-// countdown changed, or the network label changed. Call every loop while the
+// countdown changed, or the top bar changed. Call every loop while the
 // message screen is visible; pass queueChanged = true when returning to it.
-void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const char* networkLabel);
+void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const StatusBar& bar);
 
 // Wi-Fi setup screen (F-002): QR code for the ESP BLE Provisioning app, the
 // device name, the proof-of-possession code, and a status line.
