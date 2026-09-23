@@ -405,6 +405,28 @@ void showQueueFullPopup(uint64_t nowMs)
     popupUntilMs = nowMs + kPopupMs;
 }
 
+void sendScreenshot(Print& out)
+{
+    const uint8_t* pixels = static_cast<const uint8_t*>(frame.getPointer());
+    if (pixels == nullptr) {
+        out.println("SCREENSHOT unavailable");
+        return;
+    }
+    static const char kHex[] = "0123456789abcdef";
+    char row[kWidth * 2 + 1];
+    out.printf("SCREENSHOT %d %d rgb332\n", kWidth, kHeight);
+    for (int y = 0; y < kHeight; y++) {
+        for (int x = 0; x < kWidth; x++) {
+            const uint8_t value = pixels[y * kWidth + x];
+            row[2 * x] = kHex[value >> 4];
+            row[2 * x + 1] = kHex[value & 0x0F];
+        }
+        row[kWidth * 2] = '\0';
+        out.println(row);
+    }
+    out.println("END");
+}
+
 void showNotice(const char* text)
 {
     frame.fillSprite(TFT_BLACK);

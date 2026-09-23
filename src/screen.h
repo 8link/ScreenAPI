@@ -4,6 +4,7 @@
 #include <message_queue.h>
 #include <stdint.h>
 
+#include <Print.h>
 #include <TFT_eSPI.h>  // color constants for callers
 
 namespace screen {
@@ -28,6 +29,11 @@ void showWelcome(const char* ssid, const char* ip);
 
 // Shows "Queue full, new messages dropped" over the message screen for 3 s (F-005).
 void showQueueFullPopup(uint64_t nowMs);
+
+// Writes the last drawn frame as text (F-012): a header line
+// "SCREENSHOT <width> <height> rgb332", one line of hex per pixel row, then "END".
+// Read by tools/screenshot.py. Blocks for about 6 s at 115200 baud.
+void sendScreenshot(Print& out);
 
 // One centered line of text on an otherwise empty screen.
 void showNotice(const char* text);

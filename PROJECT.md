@@ -256,6 +256,16 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Behavior:** Shown first: a large-font message with inline green and red parts and 30 s on screen. Then: a confirm message with a title and value long enough to scroll both ways; a small-font confirm message showing inline colors and an unknown tag; a red large-font confirm message long enough to scroll; a white message with 60 s on screen. Serial prints `Queue: 5 messages` and the free heap after boot. Since 0.0.6 the demo messages are added only when nothing was restored (first boot, or an empty queue was saved).
 - **Verification:** On device, 2026-09-23 (0.0.5): serial shows `Queue: 5 messages` at 2.3 s; the first message expired after 30 s on screen, at 32.3 s.
 
+### F-012 - Screenshot over serial (development)
+
+- **Area:** Tooling
+- **Status:** Done
+- **Added in version:** 0.0.11
+- **Description:** Captures the current screen as a PNG without a camera, to check layouts and colors while developing.
+- **Source files:** `src/main.cpp` (`handleSerialCommands`), `src/screen.cpp` (`sendScreenshot`), `tools/screenshot.py`
+- **Behavior:** Sending `S` on the serial port makes the firmware write `SCREENSHOT 240 135 rgb332`, 135 lines of hex (one per pixel row of the 8-bit frame buffer), and `END`; the loop blocks for about 6 s. `tools/screenshot.py [out.png] [--port /dev/ttyUSB0] [--scale 3]` sends the command and saves a PNG. It opens the port without resetting the board (BOARDS.md UART). Only frames drawn through the frame buffer are captured; the boot screen is not.
+- **Verification:** On device, 2026-09-23: screenshots of the message screen matched the expected layout; opening the port with the script's line order did not reset the board.
+
 <!-- Template for new entries:
 
 ### F-XXX - Title
@@ -352,6 +362,8 @@ pio device monitor -e <env>          # serial monitor
 pio test -e native                   # hardware-independent unit tests
 pio test -e <env>                    # on-device tests
 ```
+
+Screenshot of the device screen (F-012): `python3 tools/screenshot.py screenshot.png`
 
 MCP endpoint by hand (F-003), from a machine on the same network:
 

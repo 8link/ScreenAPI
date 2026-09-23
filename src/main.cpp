@@ -168,6 +168,16 @@ bool announceConnection(uint64_t now)
     return addIpMessage(ip);
 }
 
+// Serial commands for development (F-012): 'S' sends a screenshot.
+void handleSerialCommands()
+{
+    while (Serial.available() > 0) {
+        if (Serial.read() == 'S') {
+            screen::sendScreenshot(Serial);
+        }
+    }
+}
+
 void scheduleSave(uint64_t now)
 {
     saveDue = true;
@@ -217,6 +227,7 @@ void loop()
 {
     const uint64_t now = nowMs();
     network::poll(now);
+    handleSerialCommands();
     // Buttons are read in every mode so their state stays consistent; events
     // are ignored while the setup or welcome screen is shown.
     const ui::PairEvent event =

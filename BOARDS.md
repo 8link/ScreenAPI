@@ -216,6 +216,7 @@ Free heap: 295564 bytes, largest block: 110580 bytes          (2.3 s)
 ```
 
 - **Serial capture without a terminal program:** opening the port can leave the chip in download mode (`boot:0x3 ... waiting for download`). Release DTR and RTS, then pulse RTS (EN) for 100 ms to reset into a normal boot.
+- **Opening the port without a reset** (Linux, pyserial, CP2104, observed 2026-09-23): opening raises DTR and RTS together, which the auto-reset transistors ignore. Setting `dtr = False` first leaves RTS alone asserted for a moment, which pulls EN low and resets the board. Release RTS first, then DTR (`tools/screenshot.py`).
 - **Smoke test:** backlight on; "ScreenAPI" and the version centered in landscape, not shifted, clipped, or mirrored (F-010)
 - **Known-good firmware version:** 0.0.3 (2026-09-23)
 

@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.10
+**Current firmware version:** 0.0.11
 
 ## Format
 
@@ -39,6 +39,31 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.11 - Add screenshot over serial
+
+**Date:** 2026-09-23 18:59
+**Author:** Claude Opus 5.5
+**Type:** Tooling
+
+**Summary:**
+The firmware sends its frame buffer over serial on the `S` command, and `tools/screenshot.py` saves it as a PNG (F-012). Used to check screen designs without a camera.
+
+**Changes:**
+- `src/screen.h`, `.cpp` - `sendScreenshot`: RGB332 frame as hex rows.
+- `src/main.cpp` - Serial command handling.
+- `tools/screenshot.py` - New. Captures without resetting the board and writes a PNG.
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.11`.
+- `PROJECT.md` - F-012; verification command.
+- `BOARDS.md` - Port opening order that avoids a reset.
+
+**Verification:**
+- `pio test -e native`: 74 of 74 tests passed.
+- `pio run -e tdisplay` succeeded: RAM 85,508 bytes (26.1%) static, flash 1,764,577 bytes (89.8%).
+- On device: screenshot of the message screen captured; the first attempt reset the board (DTR released before RTS), the fixed order does not.
+
+**Git commit:**
+- `v0.0.11 - Add screenshot over serial`
 
 ## docs - Record Claude Code connection to the MCP server
 
