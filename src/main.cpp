@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include <button_pair.h>
 #include <esp_timer.h>
 #include <message_queue.h>
@@ -16,14 +17,22 @@ constexpr uint32_t kLongPressMs = 1500;  // hold delete this long to clear all
 constexpr uint32_t kBootScreenMs = 1500;
 constexpr uint32_t kSaveDelayMs = 1000;  // one flash write for a burst of changes
 constexpr uint32_t kWifiResetHoldMs = 5000;  // hold both buttons this long to forget Wi-Fi
+constexpr uint32_t kWelcomeMs = 3000;
+constexpr uint32_t kIpMessageS = 60;  // on-screen time of the IP message (D-027)
 
 mq::MessageQueue queue;
 ui::ButtonPair buttons(kDebounceMs, kLongPressMs, kWifiResetHoldMs);  // first: delete, second: scroll
 bool saveDue = false;
 uint64_t saveAtMs = 0;
+// True while the setup or welcome screen covers the messages, so the message
+// screen is redrawn when it returns.
+bool coverShown = false;
 bool setupShown = false;
 network::SetupStatus shownSetupStatus = network::SetupStatus::Waiting;
 network::State lastState = network::State::Connecting;
+bool welcomeDone = false;
+uint64_t welcomeUntilMs = 0;
+char announcedIp[16] = "";
 
 // 64-bit uptime; millis() is 32-bit and wraps after about 49.7 days.
 uint64_t nowMs()
@@ -140,22 +149,55 @@ void runSetupScreen()
         screen::showSetup(network::qrPayload(), network::serviceName(), network::pop(), setupStatusText(status),
                           setupStatusColor(status));
         setupShown = true;
+        coverShown = true;
         shownSetupStatus = status;
     }
     queue.pauseCountdown();
 }
 
-void logStateChange()
+// Adds or replaces the IP message (F-009). Returns true if the queue changed.
+bool addIpMessage(const char* ip)
+{
+    char value[160];
+    snprintf(value, sizeof(value), "{green}Connected{/} to %s\nIP %s\nMCP http://screenapi.local/mcp",
+             WiFi.SSID().c_str(), ip);
+    const mq::NewMessage message{"ip", "Network", value, mq::FontSize::Small, mq::Color::White, mq::Kind::Timed,
+                                 kIpMessageS};
+    const mq::AddResult result = queue.add(message);
+    if (result == mq::AddResult::Full) {
+        Serial.println("IP message dropped: queue full");
+    }
+    return result == mq::AddResult::Added || result == mq::AddResult::Replaced;
+}
+
+// On connecting: the welcome screen once per boot, and the IP message when the
+// address is new for this boot (F-009, D-027). Returns true if the queue changed.
+bool announceConnection(uint64_t now)
 {
     const network::State state = network::state();
     if (state == lastState) {
-        return;
+        return false;
     }
     lastState = state;
-    if (state == network::State::Connected) {
-        Serial.printf("Free heap after Wi-Fi connect: %u bytes, largest block: %u bytes\n", static_cast<unsigned>(ESP.getFreeHeap()),
-                      static_cast<unsigned>(ESP.getMaxAllocHeap()));
+    if (state != network::State::Connected) {
+        return false;
     }
+    Serial.printf("Free heap after Wi-Fi connect: %u bytes, largest block: %u bytes\n",
+                  static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMaxAllocHeap()));
+
+    char ip[16];
+    snprintf(ip, sizeof(ip), "%s", WiFi.localIP().toString().c_str());
+    if (!welcomeDone) {
+        welcomeDone = true;
+        welcomeUntilMs = now + kWelcomeMs;
+        coverShown = true;
+        screen::showWelcome(WiFi.SSID().c_str(), ip);
+    }
+    if (strcmp(ip, announcedIp) == 0) {
+        return false;
+    }
+    snprintf(announcedIp, sizeof(announcedIp), "%s", ip);
+    return addIpMessage(ip);
 }
 
 void scheduleSave(uint64_t now)
@@ -212,9 +254,8 @@ void loop()
 {
     const uint64_t now = nowMs();
     network::poll(now);
-    logStateChange();
     // Buttons are read in every mode so their state stays consistent; events
-    // are ignored on the setup screen.
+    // are ignored while the setup or welcome screen is shown.
     const ui::PairEvent event =
         buttons.update(digitalRead(PIN_BUTTON_DELETE) == LOW, digitalRead(PIN_BUTTON_SCROLL) == LOW, now);
 
@@ -224,15 +265,21 @@ void loop()
         delay(20);
         return;
     }
-    const bool returningFromSetup = setupShown;
     setupShown = false;
 
-    // Tick before handling buttons, so time already spent is charged to the message that was on screen.
-    bool contentChanged = queue.tick(now);
-    if (contentChanged) {
-        Serial.printf("Timed message expired, %u left\n", static_cast<unsigned>(queue.size()));
+    bool contentChanged = announceConnection(now);
+    const bool covered = now < welcomeUntilMs;
+    bool redraw = contentChanged;
+    if (covered) {
+        queue.pauseCountdown();
+    } else {
+        // Tick before handling buttons, so time already spent is charged to the message that was on screen.
+        if (queue.tick(now)) {
+            contentChanged = true;
+            Serial.printf("Timed message expired, %u left\n", static_cast<unsigned>(queue.size()));
+        }
+        redraw |= handleButton(event, contentChanged) || contentChanged;
     }
-    bool changed = handleButton(event, contentChanged) || contentChanged || returningFromSetup;
 
     const mcp_server::Events mcpEvents = mcp_server::poll(network::state() == network::State::Connected);
     if (mcpEvents.messageDropped) {
@@ -240,15 +287,19 @@ void loop()
     }
     if (mcpEvents.queueChanged) {
         contentChanged = true;
-        changed = true;
+        redraw = true;
     }
     if (contentChanged) {
         scheduleSave(now);
     }
     saveIfDue(now);
 
-    char networkLabel[24];
-    network::label(networkLabel, sizeof(networkLabel));
-    screen::update(queue, now, changed, networkLabel);
+    if (!covered) {
+        redraw |= coverShown;
+        coverShown = false;
+        char networkLabel[24];
+        network::label(networkLabel, sizeof(networkLabel));
+        screen::update(queue, now, redraw, networkLabel);
+    }
     delay(5);
 }

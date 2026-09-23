@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.8
+**Current firmware version:** 0.0.9
 
 ## Format
 
@@ -39,6 +39,30 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.9 - Add welcome screen and IP message
+
+**Date:** 2026-09-23 17:52
+**Author:** Claude Opus 5.5
+**Type:** Display, Wi-Fi
+
+**Summary:**
+After connecting, a 3 s welcome screen shows the network, the IP address, and the MCP URL, and a timed IP message with id `ip` is added to the queue (F-009, D-027).
+
+**Changes:**
+- `src/main.cpp` - Connection announcement: welcome screen once per boot, IP message on first connect or IP change; one cover path for the setup and welcome screens.
+- `src/screen.h`, `.cpp` - Welcome screen.
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.9`.
+- `PROJECT.md` - F-009; D-027.
+
+**Verification:**
+- `pio test -e native`: 74 of 74 tests passed (no logic library changes).
+- `pio run -e tdisplay` succeeded: RAM 85,508 bytes (26.1%) static, flash 1,765,505 bytes (89.8%). No new warnings.
+- On device: 4 messages restored, IP message added, 5 messages saved (1,036 bytes); MCP `queue_status` reported 5 of 30. The user then scrolled and deleted all messages with the buttons (serial log).
+- Not yet: the welcome screen by eye.
+
+**Git commit:**
+- `v0.0.9 - Add welcome screen and IP message`
 
 ## 0.0.8 - Add MCP server with show_message and queue_status
 

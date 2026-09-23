@@ -23,6 +23,9 @@ void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, co
 // device name, the proof-of-possession code, and a status line.
 void showSetup(const char* qrPayload, const char* serviceName, const char* pop, const char* status, uint16_t statusColor);
 
+// Welcome screen after connecting (F-009): version, network name, IP address, MCP URL.
+void showWelcome(const char* ssid, const char* ip);
+
 // Shows "Queue full, new messages dropped" over the message screen for 3 s (F-005).
 void showQueueFullPopup(uint64_t nowMs);
 

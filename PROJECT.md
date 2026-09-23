@@ -227,12 +227,14 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-009 - Welcome screen and IP message
 
 - **Area:** Display, Wi-Fi
-- **Status:** Planned
-- **Added in version:** not yet implemented
-- **Description:** After connecting, the device shows a welcome screen with its DHCP IP address and adds a message with the IP address to the queue.
-- **Source files:** TBD
-- **Behavior:** TBD: how long the welcome screen stays, the kind of the IP message (time-driven or confirm-required), what happens on reconnect or IP change, what happens if the queue is full.
-- **Verification:** TBD
+- **Status:** In progress (implemented in 0.0.9; the IP message verified on the device, the welcome screen not yet seen)
+- **Added in version:** 0.0.9
+- **Description:** After connecting, the device shows a welcome screen with its DHCP IP address and adds a message with the IP address to the queue (D-010, D-027).
+- **Source files:** `src/main.cpp` (`announceConnection`, `addIpMessage`), `src/screen.cpp` (`showWelcome`)
+- **Behavior:**
+  - Welcome screen: at the first connection after each boot, including right after Wi-Fi setup, for 3 s. Shows `ScreenAPI v<FW_VERSION>`, `Connected to <SSID>`, the IP in large green text, and `screenapi.local/mcp`. Timed messages do not count down and buttons are ignored while it is shown; MCP requests are still handled.
+  - IP message: id `ip`, title `Network`, value `Connected to <SSID>` (green), `IP <ip>`, `MCP http://screenapi.local/mcp`; small white font; timed, 60 s on screen. Added at the first connection after boot and when the IP changes; a reconnect with the same IP adds nothing. The id makes it replace the previous IP message, including one restored from flash. A full queue drops it (serial: `IP message dropped: queue full`).
+- **Verification:** On device, 2026-09-23 (0.0.9): 4 messages restored, then the IP message added (5 messages saved, 1,036 bytes); `queue_status` over MCP reported 5 of 30. Not yet: the welcome screen by eye, an IP change.
 
 ### F-010 - Boot screen with firmware version
 
@@ -337,6 +339,7 @@ Record decisions that a later change could accidentally undo.
 | D-024 | Partition table `min_spiffs.csv`: two 1.9 MB app slots (OTA stays possible), 128 KB LittleFS. | User decision. BLE provisioning made the firmware 1.64 MB, over the default 1.25 MB app slot; MCP needs more. Changing it erased the saved messages once. | 2026-09-23 |
 | D-025 | MCP over Streamable HTTP without streaming or sessions: one JSON response per POST at `/mcp` on port 80, plus the mDNS name `screenapi.local`. Requests with a foreign `Origin` header are rejected. Tools: `show_message` and `queue_status`. | User approved the proposal. JSON-only responses keep the firmware small and work with Claude Code; the Origin check is required by the MCP spec; mDNS keeps the client setting valid when the DHCP address changes. | 2026-09-23 |
 | D-026 | Text from MCP is converted for the ASCII fonts: common typographic characters are mapped (dashes, curly quotes, ellipsis, arrows, bullets, check marks, non-breaking spaces), other non-ASCII characters become '?', and limits apply after the conversion. | The fonts cover ASCII only, and LLM output often contains typographic characters. Mapping keeps the text readable; the result tells the client what was replaced. | 2026-09-23 |
+| D-027 | The welcome screen shows for 3 s at the first connection after each boot. The IP message has id `ip`, is timed (60 s on screen), and is re-added only at the first connection after boot or when the IP changes. | The user asked for the IP on a welcome screen and as a queued message and left the details open. The id keeps one IP message at most; timed, because the IP is always in the top bar. | 2026-09-23 |
 
 ## Verification
 

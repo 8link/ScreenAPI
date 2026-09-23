@@ -383,6 +383,23 @@ void showSetup(const char* qrPayload, const char* serviceName, const char* pop, 
     frame.pushSprite(0, 0);
 }
 
+void showWelcome(const char* ssid, const char* ip)
+{
+    char connected[48];
+    snprintf(connected, sizeof(connected), "Connected to %s", ssid);
+    frame.fillSprite(TFT_BLACK);
+    frame.setTextDatum(TC_DATUM);
+    frame.setTextColor(TFT_LIGHTGREY);
+    frame.drawString("ScreenAPI v" FW_VERSION, kWidth / 2, 8, kSmallFont);
+    frame.setTextColor(TFT_WHITE);
+    frame.drawString(connected, kWidth / 2, 34, kSmallFont);
+    frame.setTextColor(TFT_GREEN);
+    frame.drawString(ip, kWidth / 2, 58, kLargeFont);
+    frame.setTextColor(TFT_LIGHTGREY);
+    frame.drawString("screenapi.local/mcp", kWidth / 2, 104, kSmallFont);
+    frame.pushSprite(0, 0);
+}
+
 void showQueueFullPopup(uint64_t nowMs)
 {
     popupUntilMs = nowMs + kPopupMs;
