@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.9
+**Current firmware version:** 0.0.10
 
 ## Format
 
@@ -39,6 +39,27 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.10 - Remove demo messages
+
+**Date:** 2026-09-23 17:56
+**Author:** Claude Opus 5.5
+**Type:** Cleanup
+
+**Summary:**
+The temporary demo messages (F-011) are removed now that messages arrive over MCP (F-003). They were added whenever nothing was restored, so an emptied queue refilled with demos after each reboot.
+
+**Changes:**
+- `src/main.cpp` - `addDemoMessages` and its call removed.
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.10`.
+- `PROJECT.md` - F-011 deprecated; modules table.
+
+**Verification:**
+- `pio run -e tdisplay` succeeded: RAM 85,508 bytes (26.1%) static, flash 1,764,261 bytes (89.7%). No new warnings.
+- On device: with the empty saved queue, `Restored 0 messages`, no demo messages; the IP message was added and saved as the only message (105 bytes).
+
+**Git commit:**
+- `v0.0.10 - Remove demo messages`
 
 ## 0.0.9 - Add welcome screen and IP message
 

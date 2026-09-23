@@ -43,7 +43,7 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 | Display / UI | Boot screen, welcome screen, top bar, message screen, queue-full popup, buffered rendering (F-005, F-007, F-009, F-010) | `src/screen.cpp` |
 | UI logic | Word wrap, auto-scroll timing, button debounce and long press; hardware-independent (F-005, F-006) | `lib/ui_logic/` |
 | Buttons | Reading the pins and acting on button events (F-006) | `src/main.cpp` |
-| Main loop | Buttons, expiry, screen update; demo messages (F-011) | `src/main.cpp` |
+| Main loop | Buttons, expiry, MCP events, connection announcement, screen update | `src/main.cpp` |
 | Storage | Mount LittleFS, load the queue at boot, save it after changes (F-004) | `src/storage.cpp`, `lib/message_queue/src/queue_codec.*` |
 | Time | NTP sync, timezone lookup by IP (F-008) | TBD |
 | Battery | Voltage reading for the top bar (F-007) | TBD |
@@ -249,10 +249,10 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 ### F-011 - Demo messages (temporary)
 
 - **Area:** Test
-- **Status:** In progress (temporary; remove when messages arrive over MCP, F-003)
+- **Status:** Deprecated (removed in 0.0.10, once messages arrive over MCP, F-003)
 - **Added in version:** 0.0.3
 - **Description:** Five sample messages added at boot so the message screen, scrolling, buttons, and expiry can be tried before MCP exists.
-- **Source files:** `src/main.cpp` (`addDemoMessages`)
+- **Source files:** `src/main.cpp` (`addDemoMessages`, 0.0.3 to 0.0.9; removed)
 - **Behavior:** Shown first: a large-font message with inline green and red parts and 30 s on screen. Then: a confirm message with a title and value long enough to scroll both ways; a small-font confirm message showing inline colors and an unknown tag; a red large-font confirm message long enough to scroll; a white message with 60 s on screen. Serial prints `Queue: 5 messages` and the free heap after boot. Since 0.0.6 the demo messages are added only when nothing was restored (first boot, or an empty queue was saved).
 - **Verification:** On device, 2026-09-23 (0.0.5): serial shows `Queue: 5 messages` at 2.3 s; the first message expired after 30 s on screen, at 32.3 s.
 

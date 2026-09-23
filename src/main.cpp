@@ -40,38 +40,6 @@ uint64_t nowMs()
     return static_cast<uint64_t>(esp_timer_get_time()) / 1000;
 }
 
-// Temporary sample messages until messages arrive over MCP (PROJECT.md F-011).
-// The last one added is shown first.
-void addDemoMessages()
-{
-    const mq::NewMessage demos[] = {
-        {"demo-timer", "Timer",
-         "Timed message: it counts down only while it is on screen. The box at the bottom right shows the time left.",
-         mq::FontSize::Small, mq::Color::White, mq::Kind::Timed, 60},
-        {"demo-error", "Upload failed",
-         "Serial port not found. Check the USB cable and the USB-UART driver, then run the upload again.",
-         mq::FontSize::Large, mq::Color::Red, mq::Kind::Confirm, 0},
-        {"demo-colors", "Colors",
-         "Parts of the text can have their own color: {green}green{/}, {red}red{/}, {blue}blue{/}, and back to "
-         "the message color. Unknown tags like {yellow} stay as written.",
-         mq::FontSize::Small, mq::Color::White, mq::Kind::Confirm, 0},
-        {"demo-long", "Claude Code - ScreenAPI - working on message screen and buttons",
-         "Demo of vertical scrolling. This value is longer than the text area, so it pauses at the top, "
-         "scrolls down slowly, pauses at the bottom, and then jumps back to the top. The title above scrolls "
-         "sideways the same way when it is wider than the screen. Press the delete button to remove this "
-         "message, hold it for 1.5 seconds to clear all messages, and press the scroll button to show the "
-         "next message.",
-         mq::FontSize::Small, mq::Color::White, mq::Kind::Confirm, 0},
-        {"demo-tests", "Tests", "{green}45 passed{/}, {red}0 failed{/}. Gone after 30 s on screen.",
-         mq::FontSize::Large, mq::Color::White, mq::Kind::Timed, 30},
-    };
-    for (const mq::NewMessage& demo : demos) {
-        if (queue.add(demo) != mq::AddResult::Added) {
-            Serial.printf("Demo message rejected: %s\n", demo.id);
-        }
-    }
-}
-
 // Returns true if the screen needs a redraw. Sets contentChanged when messages
 // were removed; scrolling alone is not saved, so it does not set it.
 bool handleButton(ui::PairEvent event, bool& contentChanged)
@@ -241,11 +209,6 @@ void setup()
     storage::begin();
     const size_t restored = storage::load(queue);
     Serial.printf("Restored %u messages\n", static_cast<unsigned>(restored));
-    if (restored == 0) {
-        addDemoMessages();
-        scheduleSave(nowMs());
-    }
-    Serial.printf("Queue: %u messages\n", static_cast<unsigned>(queue.size()));
     Serial.printf("Free heap: %u bytes, largest block: %u bytes\n", static_cast<unsigned>(ESP.getFreeHeap()),
                   static_cast<unsigned>(ESP.getMaxAllocHeap()));
 }
