@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.13
+**Current firmware version:** 0.0.14
 
 ## Format
 
@@ -39,6 +39,34 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.14 - Organize board-specific code per board
+
+**Date:** 2026-09-23 19:23
+**Author:** Claude Opus 5.5
+**Type:** Refactor
+
+**Summary:**
+Board-specific headers moved to `include/boards/tdisplay/` with a new `board.h` for the screen size, rotation, and capabilities (D-030). The layout derives from the board's screen size, the setup QR code scales to the height, battery support is optional per board, and the boot line names the board. Behavior on the T-Display is unchanged. PROJECT.md gains an "Adding a board" checklist.
+
+**Changes:**
+- `include/boards/tdisplay/board.h` - New. Name, screen size and rotation, battery sense flag.
+- `include/boards/tdisplay/pins.h`, `tft_setup.h` - Moved from `include/`; pins.h documents what every board must provide.
+- `platformio.ini` - `-Iinclude/boards/tdisplay` instead of `-Iinclude`; `FW_VERSION` bumped to `0.0.14`.
+- `src/screen.h`, `.cpp` - Size and rotation from board.h, compile-time minimum size, centered setup and welcome screens, QR scale from the height, battery pill only with battery sense.
+- `src/battery.h`, `.cpp` - `available()`; compiled without battery pins; compile-time check against board.h.
+- `src/main.cpp` - board.h; boot line with the board name; battery reading only when available.
+- `AGENTS.md` - Pin header rule points to `include/boards/<board>/pins.h`.
+- `PROJECT.md` - Repository layout, Adding a board, F-010 sources, D-013 updated, D-030.
+- `BOARDS.md` - Pin table path, boot line, second battery reading.
+
+**Verification:**
+- `pio test -e native`: 81 of 81 tests passed.
+- `pio run -e tdisplay` succeeded: RAM 86,832 bytes (26.5%) static, flash 1,782,129 bytes (90.6%). The TFT_eSPI library compile still sees ST7789_DRIVER, CGRAM_OFFSET, and the T-Display pins.
+- On device: `ScreenAPI v0.0.14 on LilyGO TTGO T-Display`; Wi-Fi, clock, MCP, and saving as before; screenshots identical in layout to 0.0.13; `B` reads 4,707 mV.
+
+**Git commit:**
+- `v0.0.14 - Organize board-specific code per board`
 
 ## docs - Add rule for task status messages on the display
 

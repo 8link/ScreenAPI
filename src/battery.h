@@ -5,9 +5,12 @@
 
 namespace battery {
 
+// False on boards without battery sense (board::kHasBatterySense).
+bool available();
+
 void begin();
 
-// Battery voltage in millivolts, averaged over several samples.
+// Battery voltage in millivolts, averaged over several samples; 0 when not available.
 uint32_t readMillivolts();
 
 }  // namespace battery

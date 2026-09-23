@@ -48,7 +48,7 @@ Sources: vendor repository https://github.com/Xinyuan-LilyGO/TTGO-T-Display (rea
 
 ### Pin mapping
 
-Mirrors `include/pins.h`, which is the source of truth. Values come from the vendor README and `Setup25_TTGO_T_Display.h`.
+Mirrors `include/boards/tdisplay/pins.h` (`include/pins.h` before 0.0.14), which is the source of truth. Values come from the vendor README and `Setup25_TTGO_T_Display.h`.
 
 | Signal | GPIO | Direction | Peripheral | Notes |
 |--------|------|-----------|------------|-------|
@@ -83,7 +83,7 @@ Reserved and unusable pins:
 ### Power
 
 - **Input:** USB-C 5 V. 3.3 V from an AP2112K-3.3 LDO (schematic).
-- **Battery sense on USB power:** 4,765 mV (16-sample average of `analogReadMilliVolts` on GPIO34 times 2, ADC_EN high), steady; 2026-09-23, unit in hand on USB, battery presence not checked (probably none). Above a Li-ion cell's 4.2 V, so the firmware treats readings at or above 4,400 mV as USB power (PROJECT.md D-028). Reading with a battery attached, and while charging: not yet measured.
+- **Battery sense on USB power:** 4,765 mV (16-sample average of `analogReadMilliVolts` on GPIO34 times 2, ADC_EN high), steady; 2026-09-23, unit in hand on USB, battery presence not checked (probably none). Above a Li-ion cell's 4.2 V, so the firmware treats readings at or above 4,400 mV as USB power (PROJECT.md D-028). Another reading on 2026-09-23 with 0.0.14: 4,707 mV, so readings on USB vary by at least 60 mV. Reading with a battery attached, and while charging: not yet measured.
 - **Battery chemistry:** single-cell Li-ion / LiPo, 3.7 to 4.2 V (schematic connector label)
 - **Battery capacity:** TBD (none supplied with the board)
 - **Charge IC:** TP4054 (schematic), red charge LED
@@ -211,7 +211,7 @@ ScreenAPI v0.0.1
 - **Expected boot serial output:** after the ROM boot log (see UART, Boot-time noise), observed with 0.0.3 on 2026-09-22:
 
 ```
-ScreenAPI v0.0.3                                              (0.2 s after reset)
+ScreenAPI v0.0.3                                              (0.2 s after reset; since 0.0.14 "ScreenAPI vX.Y.Z on LilyGO TTGO T-Display")
 Queue: 5 messages                                             (2.3 s)
 Free heap: 295564 bytes, largest block: 110580 bytes          (2.3 s)
 ```
@@ -246,7 +246,7 @@ Free heap: 295564 bytes, largest block: 110580 bytes          (2.3 s)
 
 ### Pin mapping
 
-This table mirrors the pin header in code (include/pins.h or include/config.h). The header is the source of truth; keep this table in sync.
+This table mirrors the board's pin header, `include/boards/<board>/pins.h`. The header is the source of truth; keep this table in sync.
 
 | Signal | GPIO | Direction | Peripheral | Notes |
 |--------|------|-----------|------------|-------|

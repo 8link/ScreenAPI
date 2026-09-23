@@ -16,6 +16,7 @@ struct StatusBar {
     char network[24];    // IP address or a short status
     Link link;           // colors the network pill's status stripe
     char clock[8];       // "18:27", or "--:--" before the time is known
+    bool hasBattery;     // the board has battery sense; otherwise no battery pill
     bool batteryKnown;   // false until the first reading
     bool externalPower;  // on USB power: lightning bolt instead of a level
     int batteryPercent;  // 0..100

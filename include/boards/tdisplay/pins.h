@@ -1,5 +1,7 @@
 // Pin assignments for the LilyGO TTGO T-Display.
-// Single source of truth for pins; the BOARDS.md pin table mirrors this file.
+// Single source of truth for this board's pins; the BOARDS.md pin table mirrors this file.
+// Every board provides the TFT_* pins for TFT_eSPI and PIN_BUTTON_DELETE and
+// PIN_BUTTON_SCROLL; PIN_BATTERY_ADC and PIN_ADC_EN only with battery sense.
 #pragma once
 
 // ST7789V display on SPI. MISO is not connected on this board.

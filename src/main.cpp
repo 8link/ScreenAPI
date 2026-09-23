@@ -9,7 +9,7 @@
 #include "clock.h"
 #include "mcp_server.h"
 #include "network.h"
-#include "pins.h"
+#include "board.h"
 #include "screen.h"
 #include "storage.h"
 
@@ -183,14 +183,18 @@ void handleSerialCommands()
         if (command == 'S') {
             screen::sendScreenshot(Serial);
         } else if (command == 'B') {
-            Serial.printf("Battery: %u mV\n", static_cast<unsigned>(battery::readMillivolts()));
+            if (battery::available()) {
+                Serial.printf("Battery: %u mV\n", static_cast<unsigned>(battery::readMillivolts()));
+            } else {
+                Serial.println("Battery: no battery sense on this board");
+            }
         }
     }
 }
 
 void readBatteryIfDue(uint64_t now)
 {
-    if (batteryKnown && now - lastBatteryReadMs < kBatteryReadMs) {
+    if (!battery::available() || (batteryKnown && now - lastBatteryReadMs < kBatteryReadMs)) {
         return;
     }
     lastBatteryReadMs = now;
@@ -215,6 +219,7 @@ screen::StatusBar statusBar()
         break;
     }
     clock_sync::text(bar.clock, sizeof(bar.clock));
+    bar.hasBattery = battery::available();
     bar.batteryKnown = batteryKnown;
     bar.externalPower = batteryLevel.external;
     bar.batteryPercent = batteryLevel.percent;
@@ -244,7 +249,7 @@ void saveIfDue(uint64_t now)
 void setup()
 {
     Serial.begin(115200);
-    Serial.printf("ScreenAPI v%s\n", FW_VERSION);
+    Serial.printf("ScreenAPI v%s on %s\n", FW_VERSION, board::kName);
 
     // GPIO35 is input-only and has no internal pull-up; the board provides an external one.
     pinMode(PIN_BUTTON_DELETE, INPUT);

@@ -74,14 +74,28 @@ Left and right margins are 4 px.
 ### Planned repository layout
 
 ```
-platformio.ini   PlatformIO environments; shared [env] defines FW_VERSION
-include/         Headers: pins.h (single pin header), tft_setup.h (TFT_eSPI configuration)
+platformio.ini   PlatformIO environments; shared [env] defines FW_VERSION; one env per board
+include/boards/<board>/
+                 board.h (screen size, rotation, capabilities), pins.h (the board's pins),
+                 tft_setup.h (TFT_eSPI configuration); since 0.0.14 (D-030)
 src/             Firmware sources
 lib/             Project-local libraries
 test/            Unit tests (native env for hardware-independent logic)
 ```
 
-platformio.ini, include/, and src/ exist since 0.0.1; lib/ and test/ since 0.0.2.
+platformio.ini, include/, and src/ exist since 0.0.1; lib/ and test/ since 0.0.2; tools/ since 0.0.11.
+
+### Adding a board
+
+Since 0.0.14 the firmware is organized per board (D-030). To add one:
+
+1. Copy `include/boards/tdisplay/` to `include/boards/<board>/` and adapt `board.h` (name, screen size after rotation, rotation, `kHasBatterySense`), `pins.h`, and `tft_setup.h` (TFT_eSPI driver, size, pins, offsets).
+2. Add `[env:<board>]` to platformio.ini: `platform`, `board`, `framework = arduino`, `board_build.partitions`, `lib_deps`, and `build_flags = ${env.build_flags} -Iinclude/boards/<board>`.
+3. Build, then check that TFT_eSPI compiled with the board's setup (the preprocessor check in D-013); a wrong include path still builds.
+4. Add a BOARDS.md section from the template and a row in Supported boards.
+5. Flash, then check the boot line (`ScreenAPI vX.Y.Z on <board name>`), `tools/screenshot.py`, the buttons, and `B` for the battery.
+
+Limits of the current code: the screen must be at least 240 x 135 after rotation (compile-time check); the board needs the two buttons (`PIN_BUTTON_DELETE`, `PIN_BUTTON_SCROLL`); the 8-bit frame buffer takes width x height bytes of internal RAM (about 94 KB largest free block without PSRAM); BLE provisioning needs BLE (not the ESP32-S2); the firmware needs an app slot of about 1.8 MB; the `btInUse()` override (Q-005) is for the classic ESP32 and harmless elsewhere. The layout keeps fixed row heights and adds extra height to the value area; setup and welcome screens are centered vertically; the setup QR code scales up to 4 px per module.
 
 ## Supported boards
 
@@ -254,7 +268,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Status:** Done
 - **Added in version:** 0.0.1
 - **Description:** First firmware. Brings up the toolchain, display driver, and board: prints the firmware version on serial and shows it on screen.
-- **Source files:** `src/main.cpp`, `src/screen.cpp`, `include/pins.h`, `include/tft_setup.h`, `platformio.ini`
+- **Source files:** `src/main.cpp`, `src/screen.cpp`, `include/boards/tdisplay/pins.h`, `include/boards/tdisplay/tft_setup.h`, `platformio.ini`
 - **Behavior:** On boot, prints `ScreenAPI v<FW_VERSION>` on serial at 115200 baud. The screen, in landscape (rotation 1), shows "ScreenAPI" (font 4) and "v<FW_VERSION>" (font 2) centered, white on black, with the backlight on. Since 0.0.3 the boot screen stays for 1.5 s, then the message screen (F-005) follows.
 - **Verification:** `pio run -e tdisplay` succeeds. On device, 2026-09-22 (reported by the user): serial shows `ScreenAPI v0.0.1` after the ROM boot log (BOARDS.md, On-device verification); the screen works.
 
@@ -347,7 +361,7 @@ Record decisions that a later change could accidentally undo.
 | D-010 | IP address comes from DHCP. It shows on the welcome screen, in the top bar, and as a queued message. | User decision. | 2026-09-22 |
 | D-011 | The MCP server has no password or token. Anyone on the LAN can post messages. | User decision; accepted risk. | 2026-09-22 |
 | D-012 | Time from NTP; timezone from a lookup of the device's public IP. | User decision. | 2026-09-22 |
-| D-013 | Pins live in `include/pins.h`. TFT_eSPI is upstream `bodmer/TFT_eSPI@2.5.43`, configured by `include/tft_setup.h` (which includes pins.h); library files stay unmodified. The `tdisplay` env needs `-Iinclude` in build_flags. | One pin header. Without `-Iinclude`, TFT_eSPI does not see tft_setup.h and silently compiles with its default ILI9341 setup while src/ uses ours; the build still succeeds (observed in a verbose build). | 2026-09-22 |
+| D-013 | Pins live in the board's `pins.h` (since 0.0.14 `include/boards/<board>/`, before `include/`). TFT_eSPI is upstream `bodmer/TFT_eSPI@2.5.43`, configured by the board's `tft_setup.h` (which includes pins.h); library files stay unmodified. Each env needs `-Iinclude/boards/<board>` in build_flags (before 0.0.14: `-Iinclude`). Check with the preprocessor that the library compile sees the board's driver and pins. | One pin header per board. Without the `-I` path, TFT_eSPI does not see tft_setup.h and silently compiles with its default ILI9341 setup while src/ uses ours; the build still succeeds (observed in a verbose build). | 2026-09-22 |
 | D-014 | Newest message first; a new message is shown immediately. Scroll goes from newest to oldest and wraps. | User decision. | 2026-09-22 |
 | D-015 | A message may carry an optional id. A new message with the same id replaces the old one and moves to the front, also when the queue is full. | User decision, so repeated status updates from one sender take one slot. | 2026-09-22 |
 | D-016 | Limits: id 16, title 64, value 512 characters (raised from 30 and 160 in 0.0.3); time-driven duration 1 to 86400 seconds. Input outside the limits is rejected, not truncated. | The user asked for longer titles and values, with scrolling (D-018), and left the numbers open. 30 messages at these limits take 18,488 bytes. Rejecting lets the MCP client resend a shorter message instead of showing cut-off text. | 2026-09-22 |
@@ -364,6 +378,7 @@ Record decisions that a later change could accidentally undo.
 | D-027 | The welcome screen shows for 3 s at the first connection after each boot. The IP message has id `ip`, is timed (60 s on screen), and is re-added only at the first connection after boot or when the IP changes. | The user asked for the IP on a welcome screen and as a queued message and left the details open. The id keeps one IP message at most; timed, because the IP is always in the top bar. | 2026-09-23 |
 | D-028 | Top bar: dark slate bar with separate pills (network with status stripe, amber bold queue position, battery icon, clock). Battery as an icon only, a lightning bolt at or above 4,400 mV. Colors are exact RGB332 values. | The user asked for a dark bar, separation between elements, and a bolder queue position further right. Text for the battery and a Wi-Fi icon did not fit next to a full IP address and `30/30`. The 8-bit frame buffer would shift other colors (a 16-bit dark grey becomes olive). | 2026-09-23 |
 | D-029 | Clock: NTP for the time; the current UTC offset from `ip-api.com` over plain HTTP/1.0, refreshed hourly (every minute after a failure); 24-hour format; `--:--` until both are known. | The user asked for NTP time and a timezone based on the IP (D-012). ip-api.com needs no key, and its offset already includes daylight saving, so no timezone database is needed. A hand-written GET instead of HTTPClient saves about 150 KB of flash. | 2026-09-23 |
+| D-030 | Board-specific code lives in `include/boards/<board>/` (`board.h`, `pins.h`, `tft_setup.h`), selected per PlatformIO env with `-Iinclude/boards/<board>`. `board.h` gives the screen size, rotation, and capabilities; the layout derives from the size; battery support is optional per board. | The user asked for a structure that makes adding boards easy. Keeping each board's headers together avoids `#if` chains, and TFT_eSPI finds the matching `tft_setup.h` through the same include path. | 2026-09-23 |
 
 ## Verification
 

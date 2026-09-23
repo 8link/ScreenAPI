@@ -23,7 +23,7 @@ Consult the relevant file before making assumptions:
 Precedence:
 
 - Documentation is authoritative over assumptions or memory.
-- Exception: for values the firmware actually compiles (pin numbers, bus addresses, UUIDs, timing constants, version), the source code is the truth and documentation mirrors it. Pin assignments live in one header (include/pins.h or include/config.h, whichever the project adopts); the BOARDS.md pin table must match it.
+- Exception: for values the firmware actually compiles (pin numbers, bus addresses, UUIDs, timing constants, version), the source code is the truth and documentation mirrors it. Pin assignments live in one header per board, include/boards/<board>/pins.h; the board's BOARDS.md pin table must match it.
 - If documentation and code disagree, do not silently pick one. Flag the discrepancy, state which side you believe is correct and why, and fix it in the same task if in scope; otherwise report it.
 - A task is not complete until affected documentation is updated.
 

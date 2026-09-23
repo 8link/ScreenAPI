@@ -8,13 +8,17 @@
 #include <string.h>
 #include <text_wrap.h>
 
+#include "board.h"
+
 namespace screen {
 
 namespace {
 
-// Landscape layout, 240 x 135: top bar, title row, value area.
-constexpr int kWidth = 240;
-constexpr int kHeight = 135;
+// Layout: top bar, title row, value area. Positions derive from the board's
+// screen size; the fixed rows above the value area need at least 135 px height.
+constexpr int kWidth = board::kScreenWidth;
+constexpr int kHeight = board::kScreenHeight;
+static_assert(kWidth >= 240 && kHeight >= 135, "layout needs at least 240 x 135");
 constexpr int kMargin = 4;
 constexpr int kBarHeight = 20;
 constexpr int kTitleTop = 23;
@@ -277,12 +281,15 @@ void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
     frame.setTextDatum(MC_DATUM);
     frame.drawString(bar.clock, clockX + clockWidth / 2, kCenterY, kBarFont);
 
-    // Battery
+    // Battery, only on boards with battery sense
     constexpr int kIconWidth = 18;
-    const int batteryWidth = kIconWidth + 2 * kPillPadding;
-    const int batteryX = clockX - kPillGap - batteryWidth;
-    drawPill(batteryX, batteryWidth, kPillBackground);
-    drawBatteryIcon(batteryX + kPillPadding, bar);
+    int batteryX = clockX;
+    if (bar.hasBattery) {
+        const int batteryWidth = kIconWidth + 2 * kPillPadding;
+        batteryX = clockX - kPillGap - batteryWidth;
+        drawPill(batteryX, batteryWidth, kPillBackground);
+        drawBatteryIcon(batteryX + kPillPadding, bar);
+    }
 
     // Queue position: amber pill, black text drawn twice one pixel apart for a bold look
     char position[12];
@@ -389,9 +396,9 @@ int drawQr(int x0, int y0, int scale)
 bool begin()
 {
     tft.init();  // also switches the backlight on (TFT_BL in tft_setup.h)
-    tft.setRotation(1);  // landscape, 240 x 135
+    tft.setRotation(board::kScreenRotation);
     tft.fillScreen(TFT_BLACK);
-    // 8-bit color halves the buffer to 32,400 bytes; the four text colors survive the reduction.
+    // 8-bit color halves the buffer (32,400 bytes at 240 x 135); the four text colors survive the reduction.
     frame.setColorDepth(8);
     return frame.createSprite(kWidth, kHeight) != nullptr;
 }
@@ -420,6 +427,7 @@ void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, co
     const int32_t countdownS = countdownFor(message);
     const bool frameDue = isScrolling() && nowMs - lastFrameMs >= kFrameMs;
     const bool barChanged = !lastBarValid || strcmp(bar.network, lastBar.network) != 0 || bar.link != lastBar.link ||
+                            bar.hasBattery != lastBar.hasBattery ||
                             strcmp(bar.clock, lastBar.clock) != 0 || bar.batteryKnown != lastBar.batteryKnown ||
                             bar.externalPower != lastBar.externalPower || bar.batteryPercent != lastBar.batteryPercent;
     const bool popup = nowMs < popupUntilMs;
@@ -447,24 +455,26 @@ void showSetup(const char* qrPayload, const char* serviceName, const char* pop, 
     frame.fillSprite(TFT_BLACK);
     int textX = kMargin;
     if (qrSize > 0) {
-        constexpr int kScale = 3;  // version 4: (33 + 4) * 3 = 111 px
-        const int size = (qrSize + 4) * kScale;
-        textX += drawQr(kMargin, (kHeight - size) / 2, kScale) + 6;
+        // Largest whole-pixel scale that fits the height, at most 4 (version 4 at 3: 111 px).
+        const int scale = min(4, (kHeight - 4) / (qrSize + 4));
+        const int size = (qrSize + 4) * scale;
+        textX += drawQr(kMargin, (kHeight - size) / 2, scale) + 6;
     }
+    const int top = (kHeight - 126) / 2;  // the text block is 126 px tall
 
     char code[24];
     snprintf(code, sizeof(code), "Code %s", pop);
     frame.setTextDatum(TL_DATUM);
     frame.setTextColor(TFT_WHITE);
-    frame.drawString("Wi-Fi setup", textX, 6, kSmallFont);
+    frame.drawString("Wi-Fi setup", textX, top + 6, kSmallFont);
     frame.setTextColor(TFT_LIGHTGREY);
-    frame.drawString("ESP BLE", textX, 28, kSmallFont);
-    frame.drawString("Provisioning app", textX, 44, kSmallFont);
+    frame.drawString("ESP BLE", textX, top + 28, kSmallFont);
+    frame.drawString("Provisioning app", textX, top + 44, kSmallFont);
     frame.setTextColor(TFT_WHITE);
-    frame.drawString(serviceName, textX, 66, kSmallFont);
-    frame.drawString(code, textX, 82, kSmallFont);
+    frame.drawString(serviceName, textX, top + 66, kSmallFont);
+    frame.drawString(code, textX, top + 82, kSmallFont);
     frame.setTextColor(statusColor);
-    frame.drawString(status, textX, 110, kSmallFont);
+    frame.drawString(status, textX, top + 110, kSmallFont);
     frame.pushSprite(0, 0);
 }
 
@@ -472,16 +482,17 @@ void showWelcome(const char* ssid, const char* ip)
 {
     char connected[48];
     snprintf(connected, sizeof(connected), "Connected to %s", ssid);
+    const int top = (kHeight - 135) / 2;  // designed for 135 px, centered on taller screens
     frame.fillSprite(TFT_BLACK);
     frame.setTextDatum(TC_DATUM);
     frame.setTextColor(TFT_LIGHTGREY);
-    frame.drawString("ScreenAPI v" FW_VERSION, kWidth / 2, 8, kSmallFont);
+    frame.drawString("ScreenAPI v" FW_VERSION, kWidth / 2, top + 8, kSmallFont);
     frame.setTextColor(TFT_WHITE);
-    frame.drawString(connected, kWidth / 2, 34, kSmallFont);
+    frame.drawString(connected, kWidth / 2, top + 34, kSmallFont);
     frame.setTextColor(TFT_GREEN);
-    frame.drawString(ip, kWidth / 2, 58, kLargeFont);
+    frame.drawString(ip, kWidth / 2, top + 58, kLargeFont);
     frame.setTextColor(TFT_LIGHTGREY);
-    frame.drawString("screenapi.local/mcp", kWidth / 2, 104, kSmallFont);
+    frame.drawString("screenapi.local/mcp", kWidth / 2, top + 104, kSmallFont);
     frame.pushSprite(0, 0);
 }
 
