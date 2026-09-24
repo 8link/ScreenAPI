@@ -27,6 +27,7 @@ struct ToolOutcome {
     bool isError = false;
     bool queueChanged = false;
     bool messageDropped = false;
+    bool messageShown = false;
 };
 
 std::string toJson(const JsonDocument& doc)
@@ -247,11 +248,13 @@ ToolOutcome showMessage(mq::MessageQueue& queue, JsonObjectConst args)
     case mq::AddResult::Added:
         outcome.text = "Shown on the display. " + queueCountText(queue);
         outcome.queueChanged = true;
+        outcome.messageShown = true;
         break;
     case mq::AddResult::Replaced:
         outcome.text = std::string("Replaced the message with id \"") + id + "\" and showed it. " +
                        queueCountText(queue);
         outcome.queueChanged = true;
+        outcome.messageShown = true;
         break;
     case mq::AddResult::Full:
         outcome = toolError(
@@ -298,6 +301,7 @@ Response toolCall(mq::MessageQueue& queue, JsonVariantConst id, JsonObjectConst 
     response.body = toJson(doc);
     response.queueChanged = outcome.queueChanged;
     response.messageDropped = outcome.messageDropped;
+    response.messageShown = outcome.messageShown;
     response.summary = std::string(name) + ": " + outcome.text;
     return response;
 }

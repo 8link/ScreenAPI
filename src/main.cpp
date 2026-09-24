@@ -318,6 +318,9 @@ void loop()
     if (mcpEvents.messageDropped) {
         screen::showQueueFullPopup(now);
     }
+    if (mcpEvents.messageShown && hal::hasSpeaker()) {
+        hal::playChime();  // every show_message, replacements included (F-013)
+    }
     if (mcpEvents.queueChanged) {
         contentChanged = true;
         redraw = true;

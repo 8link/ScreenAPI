@@ -261,8 +261,13 @@ Mirrors `include/boards/waveshare_amoled18/pins.h`, which is the source of truth
 | PIN_I2C_SCL | 14 | Out | I2C | 400 kHz |
 | PIN_TOUCH_INT | 21 | In | Touch | Not used: touch is polled |
 | PIN_BUTTON_DELETE | 0 | In | BOOT button | Active LOW, internal pull-up; strapping pin |
+| PIN_I2S_MCLK | 16 | Out | I2S (ES8311) | 4.096 MHz, 256 x 16 kHz (since 0.0.26) |
+| PIN_I2S_BCLK | 9 | Out | I2S (ES8311) | |
+| PIN_I2S_WS | 45 | Out | I2S (ES8311) | Strapping pin; the codec only listens on it |
+| PIN_I2S_DOUT | 8 | Out | I2S (ES8311) | Samples to the codec's DAC |
+| PIN_AMP_EN | 46 | Out | Speaker amplifier enable | Active HIGH; on only while a chime plays; strapping pin, driven after boot |
 
-Not used by ScreenAPI: audio (ES8311: MCLK 16, BCLK 9, WS 45, DOUT 8, DIN 10, amplifier enable 46), microSD (SDMMC CLK 2, CMD 1, DATA 3).
+Not used by ScreenAPI: microphone input (I2S DIN 10), microSD (SDMMC CLK 2, CMD 1, DATA 3).
 
 ### Connected peripherals
 
@@ -272,7 +277,8 @@ Not used by ScreenAPI: audio (ES8311: MCLK 16, BCLK 9, WS 45, DOUT 8, DIN 10, am
 | TCA9554 I/O expander | I2C | 0x20 | direct register writes | Pins 0 to 2: display and touch reset |
 | CST820 touch (V2) | I2C | 0x15 | direct register reads | FT3168 at 0x38 on the original revision |
 | AXP2101 power management | I2C | 0x34 | XPowersLib 0.3.3 | Battery, USB, charger |
-| PCF85063 RTC, QMI8658 IMU, ES8311 codec | I2C / I2S | TBD | not used | |
+| ES8311 audio codec | I2C and I2S | 0x18 | direct register writes (values from Espressif's es8311 driver), ESP-IDF legacy I2S driver | DAC only, 16 kHz, 16-bit, I2S slave; drives the speaker amplifier (since 0.0.26) |
+| PCF85063 RTC, QMI8658 IMU | I2C | TBD | not used | |
 
 ### Power
 

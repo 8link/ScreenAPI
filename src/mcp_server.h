@@ -9,6 +9,7 @@ namespace mcp_server {
 struct Events {
     bool queueChanged = false;
     bool messageDropped = false;
+    bool messageShown = false;  // show_message added or replaced a message
 };
 
 void begin(mq::MessageQueue& queue);

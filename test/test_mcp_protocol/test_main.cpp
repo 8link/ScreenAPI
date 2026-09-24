@@ -130,6 +130,7 @@ static void test_show_message_defaults_to_confirm_white_small()
     const Response response = callTool("show_message", R"({"title":"Claude Code","value":"Working"})");
     TEST_ASSERT_FALSE(toolIsError());
     TEST_ASSERT_TRUE(response.queueChanged);
+    TEST_ASSERT_TRUE(response.messageShown);
     TEST_ASSERT_NOT_NULL(strstr(toolText(), "Queue: 1 of 30"));
     const mq::Message* message = queue->current();
     TEST_ASSERT_EQUAL_STRING("Claude Code", message->title);
@@ -224,6 +225,7 @@ static void test_full_queue_drops_and_reports()
     TEST_ASSERT_TRUE(toolIsError());
     TEST_ASSERT_TRUE(response.messageDropped);
     TEST_ASSERT_FALSE(response.queueChanged);
+    TEST_ASSERT_FALSE(response.messageShown);
     TEST_ASSERT_NOT_NULL(strstr(toolText(), "Queue full (30 of 30)"));
 }
 

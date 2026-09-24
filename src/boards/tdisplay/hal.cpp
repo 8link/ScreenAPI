@@ -68,6 +68,14 @@ bool scrollPressed()
     return digitalRead(PIN_BUTTON_SCROLL) == LOW;
 }
 
+// No speaker on the T-Display.
+bool hasSpeaker()
+{
+    return false;
+}
+
+void playChime() {}
+
 bool hasBattery()
 {
     return true;

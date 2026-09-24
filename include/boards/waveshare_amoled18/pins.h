@@ -18,6 +18,14 @@
 #define PIN_I2C_SCL   14
 #define PIN_TOUCH_INT 21  // unused: touch is polled
 
+// Audio: ES8311 codec on I2S (data out to the speaker amplifier), amplifier
+// enable active HIGH. GPIO 46 is a strapping pin, driven only after boot.
+#define PIN_I2S_MCLK 16
+#define PIN_I2S_BCLK 9
+#define PIN_I2S_WS   45
+#define PIN_I2S_DOUT 8
+#define PIN_AMP_EN   46
+
 // BOOT button, active LOW. Strapping pin: held LOW at reset enters download mode.
 #define PIN_BUTTON_DELETE 0
 
@@ -26,3 +34,4 @@
 #define I2C_ADDR_FT3168   0x38  // touch, original revision
 #define I2C_ADDR_CST820   0x15  // touch, V2 revision
 #define I2C_ADDR_AXP2101  0x34  // power management
+#define I2C_ADDR_ES8311   0x18  // audio codec

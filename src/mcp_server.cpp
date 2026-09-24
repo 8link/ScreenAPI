@@ -41,6 +41,7 @@ void handlePost()
     const mcp::Response response = handler->handlePost(body.c_str(), body.length());
     pending.queueChanged |= response.queueChanged;
     pending.messageDropped |= response.messageDropped;
+    pending.messageShown |= response.messageShown;
     Serial.printf("MCP: %s\n", response.summary.c_str());
     if (response.body.empty()) {
         server.send(response.httpStatus);

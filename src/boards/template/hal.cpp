@@ -62,6 +62,15 @@ bool scrollPressed()
     return digitalRead(PIN_BUTTON_SCROLL) == LOW;
 }
 
+// PORT: return true and implement playChime() if the board has a speaker (I2S
+// codec as on the AMOLED); it must not block the caller.
+bool hasSpeaker()
+{
+    return false;
+}
+
+void playChime() {}
+
 // PORT: return true and implement readBattery() if the board can measure its
 // battery (ADC divider as on the T-Display, or a power chip as on the AMOLED).
 bool hasBattery()

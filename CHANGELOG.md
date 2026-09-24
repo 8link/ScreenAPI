@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.25
+**Current firmware version:** 0.0.26
 
 ## Format
 
@@ -39,6 +39,36 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.26 - Chime on new messages on boards with a speaker
+
+**Date:** 2026-09-24 13:07
+**Author:** Claude Opus 5.5
+**Type:** Sound
+
+**Summary:**
+Every show_message that adds or replaces a message plays a short two-note chime on boards with a speaker (requested by the user; F-013, D-038). The Waveshare AMOLED plays it through its ES8311 codec and speaker amplifier from a background task, so the screen and MCP keep running; the amplifier is on only while the chime plays. The HAL gains `hasSpeaker()` and `playChime()`; the T-Display and the template have no speaker.
+
+**Changes:**
+- `src/hal.h` - `hasSpeaker()`, `playChime()`.
+- `src/boards/waveshare_amoled18/hal.cpp` - ES8311 setup over I2C, I2S at 16 kHz, chime task; `ES8311 ok/missing` in the hardware line.
+- `include/boards/waveshare_amoled18/pins.h` - I2S pins, amplifier enable, codec address.
+- `src/boards/tdisplay/hal.cpp`, `src/boards/template/hal.cpp` - No speaker.
+- `lib/mcp_protocol/src/mcp_handler.*`, `src/mcp_server.*` - `messageShown` when show_message adds or replaces a message.
+- `src/main.cpp` - Chime on `messageShown`.
+- `test/test_mcp_protocol/test_main.cpp` - `messageShown` checks.
+- `VERSION` - `0.0.26`.
+- `PROJECT.md` - F-013, D-038.
+- `BOARDS.md` - AMOLED audio pins and codec.
+- `README.md` - Sound in features and hardware.
+
+**Verification:**
+- `pio test -e native`: 81 of 81 passed.
+- `pio run -j 4`: `waveshare_amoled18` (flash 1,606,129 bytes, 24.5%), `tdisplay` (flash 1,792,189 bytes, 91.2%), `template` (flash 1,785,277 bytes, 90.8%); all three images contain `ScreenAPI v0.0.26`.
+- AMOLED: boot log `Hardware: CO5300 + CST820 (V2), expander ok, AXP2101 ok, ES8311 ok`; the user heard the chime for a test message and found it good as is.
+
+**Git commit:**
+- `v0.0.26 - Chime on new messages on boards with a speaker`
 
 ## docs - Record the 0.0.25 setup fix as verified on the AMOLED (BOARDS.md Q-009)
 

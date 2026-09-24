@@ -11,7 +11,7 @@
 // a display supported by Arduino_GFX, at least 240 x 135 pixels after
 // rotation, width x height bytes of RAM for the frame buffer (PSRAM is used
 // when present), two inputs (a touchscreen can be the second), and an app
-// partition of about 1.8 MB. A battery reading is optional.
+// partition of about 1.8 MB. A battery reading and a speaker are optional.
 #pragma once
 
 #include <Arduino_GFX_Library.h>
@@ -61,6 +61,12 @@ Fonts fonts();
 // finger is down" here.
 bool deletePressed();
 bool scrollPressed();
+
+// false on boards without a speaker; playChime() is then never called.
+// playChime() starts a short chime for a new message and returns at once; a
+// call while a chime plays is ignored.
+bool hasSpeaker();
+void playChime();
 
 // false on boards without a battery reading; readBattery() is then never
 // called and the top bar shows no battery. readBattery() is called about

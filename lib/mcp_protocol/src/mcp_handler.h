@@ -18,6 +18,7 @@ struct Response {
     std::string body;  // JSON; empty for 202 Accepted
     bool queueChanged = false;
     bool messageDropped = false;  // show_message hit a full queue
+    bool messageShown = false;    // show_message added or replaced a message
     std::string summary;          // one line for the serial log
 };
 

@@ -299,6 +299,20 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Behavior:** Sending `S` on the serial port makes the firmware write `SCREENSHOT <width> <height> indexed565`, a palette line, one line of hex per pixel row of the 8-bit frame buffer, and `END` (`rgb332` without a palette line in 0.0.11 to 0.0.14); on the native USB serial of the ESP32-S3 the firmware waits for the host while sending (`hal::setSerialBlocking`); the loop blocks for about 6 s. `tools/screenshot.py [out.png] [--port /dev/ttyUSB0] [--scale 3]` sends the command and saves a PNG. It opens the port without resetting the board (BOARDS.md UART). Only frames drawn through the frame buffer are captured; the boot screen is not.
 - **Verification:** On device, 2026-09-23: screenshots of the message screen matched the expected layout; opening the port with the script's line order did not reset the board.
 
+### F-013 - Chime on new messages
+
+- **Area:** Sound
+- **Status:** Done
+- **Added in version:** 0.0.26
+- **Description:** Boards with a speaker play a short chime when a message arrives (requested by the user; D-038). Boards without one stay silent.
+- **Source files:** `src/main.cpp`, `src/mcp_server.*`, `lib/mcp_protocol/src/mcp_handler.*` (`Response::messageShown`), `src/hal.h` (`hasSpeaker`, `playChime`), `src/boards/waveshare_amoled18/hal.cpp`
+- **Behavior:**
+  - Every `show_message` that adds or replaces a message chimes, including status updates that reuse an id. A message rejected by a full queue, other tools, and messages the firmware adds itself (IP message, demo messages) do not.
+  - The chime: two overlapping bell-like sine notes, E6 (1318.5 Hz) then C6 (1046.5 Hz) 140 ms later, each fading out (time constants 110 and 170 ms), 750 ms in total, 5 ms fade-in against clicks. Peak level 9000 of 32767 per note, DAC volume 0 dB.
+  - Played by a FreeRTOS task on core 1 (priority 2), so the screen and MCP keep running. Requests made while a chime plays are dropped, so a burst of messages gives one chime.
+  - Waveshare AMOLED: ES8311 codec at I2C 0x18 as I2S slave, 16 kHz, 16-bit, MCLK 4.096 MHz from GPIO16; the speaker amplifier (GPIO46) is switched on 5 ms before a chime and off after the DMA buffers have played out, so it does not hiss in between. The boot log's `Hardware:` line ends with `ES8311 ok` or `ES8311 missing`; if the codec does not answer, the board runs without sound.
+- **Verification:** On device, 2026-09-24 (0.0.26): the user heard the chime for a test message and found it good as is.
+
 <!-- Template for new entries:
 
 ### F-XXX - Title
@@ -393,6 +407,7 @@ Record decisions that a later change could accidentally undo.
 | D-035 | The firmware version lives in the `VERSION` file (one line, `X.Y.Z`); `tools/version.py`, a PlatformIO post script, checks the format and passes it to `src/` as `FW_VERSION`. It is not in platformio.ini. | PlatformIO wipes the whole build folder whenever platformio.ini changes (`compute_project_checksum` hashes the full configuration), so a version bump there rebuilt every library, about 9 minutes per board. Moving the define to `build_src_flags` did not help (measured 548 s). User approved the change of the AGENTS.md rule. | 2026-09-24 |
 | D-036 | Rounded display corners: each board declares `kCornerInset`, the diagonal distance from a corner at which content is complete, measured with the corner test (serial `C`: colored squares at insets of 0 to 48 px and a frame on the edges). From it the layout takes the largest corner radius that fits (inset / 0.293). On rounded boards the top bar sits 8 px from the top on black, with capsule pills, a status dot instead of the stripe, and side insets computed for that radius; the countdown is a capsule with a diagonal inset. Square boards (inset 0) keep the 0.0.12 bar. Waveshare AMOLED: 24 px. | The user reported the corners cutting off the top bar and the countdown. The first test (arcs, 0.0.21) was misread because the arcs overlap at the edges and gave 20 px, too little; squares on the diagonal are unambiguous. A plain 24 px inset in both directions left a large colored band above the bar, which the user found too much. | 2026-09-24 |
 | D-037 | Title style: white title, thin grey line (66, 66, 66) under it, and the value's default "white" drawn light grey (198, 195, 198). Waveshare AMOLED title font: `fub20` (FreeUniversal Bold 20). | The user asked for a larger title set apart from the text. Rejected on the AMOLED: `helvR24` (too large), a light band behind the title, blue lines above and below it, a slate capsule card, a blue title with a line, and mockups of a centered title, a text card, and a whole-message card. The user picked a white title, slightly grey text, and a thin line, then asked for a slightly larger title and 2 px more space under the top bar. | 2026-09-24 |
+| D-038 | A chime plays for every show_message that adds or replaces a message, on boards whose HAL reports a speaker; one chime per burst. The firmware's own messages stay silent. | User decision ("every message", including replacements, over new messages only, confirm messages only, or a caller flag). The IP message at boot is not a message that arrives. Dropping requests during a chime keeps a burst from queueing seconds of sound. | 2026-09-24 |
 
 ## Verification
 

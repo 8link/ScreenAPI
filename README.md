@@ -66,6 +66,7 @@ flowchart LR
 | **Lifecycle** | *Timed* messages count down only while they are on screen, with the time left in a small box. *Confirm* messages stay until deleted. A message with the same `id` replaces the old one, so a status update never fills the queue. |
 | **Queue** | 30 messages, newest first, saved to flash and restored after a reboot. When full, new messages are dropped, a popup says so, and the sender is told. |
 | **Screen** | Top bar with connection status, IP address, queue position, battery, and clock (NTP, timezone from your IP). Long titles scroll sideways, long text scrolls down. Flicker-free, full-frame buffered drawing. |
+| **Sound** | A short two-note chime for every message sent to the display, on boards with a speaker (Waveshare AMOLED). |
 | **Controls** | Delete the shown message, hold to clear all, show the next message; hold both inputs for 5 s to reset Wi-Fi. |
 | **Setup** | Wi-Fi via the ESP BLE Provisioning app: scan the QR code on the screen. A welcome screen shows the IP address and MCP URL. |
 
@@ -81,6 +82,7 @@ ScreenAPI runs on ESP32-family boards with Wi-Fi, BLE, and a display. Two boards
 | **Orientation** | Landscape | Portrait |
 | **Input** | Two buttons | BOOT button and capacitive touchscreen |
 | **Battery** | Li-ion connector, voltage via ADC | Li-ion connector, AXP2101 power management chip |
+| **Sound** | None | ES8311 codec and speaker: chime on new messages |
 | **USB** | USB-C with a USB-UART bridge | USB-C, native USB serial |
 | **PlatformIO env** | `tdisplay` | `waveshare_amoled18` |
 | **Status** | Verified on the device up to firmware 0.0.14 | Boots and runs Wi-Fi setup since 0.0.16 |
@@ -99,6 +101,7 @@ A larger, high-density AMOLED touch board with plenty of memory. ScreenAPI uses 
 
 - **Controls:** BOOT deletes the shown message, hold 1.5 s to clear all; a touch on the screen shows the next message; BOOT and touch held for 5 s reset Wi-Fi.
 - **Battery:** percentage, USB, and charge state from the AXP2101 power chip.
+- **Sound:** a two-note chime when a message arrives, through the ES8311 codec and the onboard speaker.
 - **Vendor:** [Waveshare ESP32-S3-Touch-AMOLED-1.8](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.8)
 
 Pinouts, measured values, and hardware quirks for each board are in [BOARDS.md](BOARDS.md).
@@ -127,7 +130,7 @@ flowchart TB
 
 - **`lib/`** holds the logic: the queue and its lifecycle, word wrap and scrolling, the MCP protocol, the clock. It has no Arduino or hardware dependency and is tested on the host with `pio test -e native`.
 - **`src/`** is the firmware shared by all boards. The screen layout is computed from the screen size and from the fonts the board chooses, so it adapts to landscape and portrait panels of any size from 240 x 135 up.
-- **`src/boards/<board>/hal.cpp`** implements [`src/hal.h`](src/hal.h), a small interface of ten functions: start the board, return the display driver and fonts, read two inputs, and optionally read the battery. Pins and screen size live in `include/boards/<board>/`.
+- **`src/boards/<board>/hal.cpp`** implements [`src/hal.h`](src/hal.h), a small interface of twelve functions: start the board, return the display driver and fonts, read two inputs, and optionally read the battery and play a chime. Pins and screen size live in `include/boards/<board>/`.
 
 ### Porting to your board
 
