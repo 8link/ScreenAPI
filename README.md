@@ -104,8 +104,6 @@ A larger, high-density AMOLED touch board with plenty of memory. ScreenAPI uses 
 - **Sound:** a two-note chime when a message arrives, through the ES8311 codec and the onboard speaker.
 - **Vendor:** [Waveshare ESP32-S3-Touch-AMOLED-1.8](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.8)
 
-Pinouts, measured values, and hardware quirks for each board are in [BOARDS.md](BOARDS.md).
-
 ## Built to be ported
 
 The goal is that any ESP32 with Wi-Fi and a display can run ScreenAPI with one small file of board code. The firmware is split into three layers:
@@ -139,7 +137,7 @@ flowchart TB
 3. In `hal.cpp`, pick your display driver from [Arduino_GFX](https://github.com/moononournation/Arduino_GFX) (ST7789, ILI9341, GC9A01, CO5300, and many more; SPI, QSPI, parallel, RGB), choose four u8g2 fonts for your pixel density, and map your buttons or touchscreen.
 4. Add an env to `platformio.ini` (copy the `template` env), build, and flash.
 
-The `template` env builds the template for a generic ESP32 with an ST7789 SPI display, so the starting point always compiles. The full checklist is in [PROJECT.md](PROJECT.md) under "Adding a board".
+The `template` env builds the template for a generic ESP32 with an ST7789 SPI display, so the starting point always compiles.
 
 **Requirements:** ESP32-family chip with Wi-Fi and BLE (BLE is used for Wi-Fi setup), a display supported by Arduino_GFX with at least 240 x 135 pixels, width x height bytes of RAM for the frame buffer (PSRAM is used when present), two inputs (a touchscreen can be one), and about 1.8 MB for the app.
 
@@ -285,8 +283,6 @@ screen() {
 screen "Tea is ready" 60    # 60 s on screen; without a number, 30 s
 ```
 
-This repository's [AGENTS.md](AGENTS.md) includes a rule that makes coding agents report their own progress on the display: a short timed message when a task starts and at each major step, and a confirm message when it ends.
-
 ## Development
 
 | Task | Command |
@@ -297,16 +293,9 @@ This repository's [AGENTS.md](AGENTS.md) includes a rule that makes coding agent
 | Screenshot of the device screen | `python3 tools/screenshot.py screen.png --port <port>` |
 | Bump the firmware version | edit `VERSION` (not platformio.ini: any change there triggers a full rebuild) |
 
-The documentation is part of the code:
-
-- [AGENTS.md](AGENTS.md) - rules for anyone (human or agent) changing the project
-- [PROJECT.md](PROJECT.md) - architecture, features (F-xxx), design decisions (D-xxx), open questions
-- [BOARDS.md](BOARDS.md) - pinouts, measurements, and quirks (Q-xxx) per board
-- [CHANGELOG.md](CHANGELOG.md) - every change, with how it was verified
-
 ## Project status
 
-ScreenAPI is an early MVP (firmware 0.0.x). All MVP features are implemented; on-device checks are still open for the latest graphics changes on the T-Display and for the display, touch, and Wi-Fi setup on the AMOLED board. See the open questions in [PROJECT.md](PROJECT.md).
+ScreenAPI is an early MVP (firmware 0.0.x). All MVP features are implemented; on-device checks are still open for the latest graphics changes on the T-Display and for the display, touch, and Wi-Fi setup on the AMOLED board.
 
 **Security:** the MCP endpoint has no authentication; anyone on your local network can post messages. It rejects requests from web pages (Origin check), but do not expose it to the internet. The clock's timezone lookup uses [ip-api.com](https://ip-api.com), free for non-commercial use.
 

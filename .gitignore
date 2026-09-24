@@ -8,3 +8,10 @@ secrets.ini
 *.key
 captures/
 dumps/
+
+# Local docs, not tracked
+AGENTS.md
+BOARDS.md
+CHANGELOG.md
+CLAUDE.md
+PROJECT.md
