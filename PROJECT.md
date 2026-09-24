@@ -235,7 +235,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Clock pill: `HH:MM`, or `--:--` until the time is known (F-008, since 0.0.13).
   - Battery pill: an 18 x 9 px battery icon. On battery: fill level, green above 50 %, amber above 20 %, red below. On USB power (reading at or above 4,400 mV): an amber lightning bolt. Before the first reading: empty outline. Read every 10 s, 16 samples averaged (`analogReadMilliVolts` on GPIO34 times 2, ADC_EN high). The percentage comes from a typical Li-ion curve (4,200 mV = 100 %, 3,300 mV = 0 %) and is approximate.
   - Queue pill: amber, `position/count` such as `2/5` (`0/0` when empty) in black, drawn twice one pixel apart for a bold look.
-  - On boards with rounded display corners (D-036, since 0.0.22) the bar has no background color, sits 8 px from the top, uses capsule pills and a status dot, and keeps clear of the corners at the sides (about 38 px on the Waveshare AMOLED).
+  - On boards with rounded display corners (D-036, since 0.0.22) the bar sits on a cool dark grey band (40, 44, 48) with a grey line under it (since 0.0.23; black in 0.0.22), 8 px from the top, uses capsule pills and a status dot, and keeps clear of the corners at the sides (about 38 px on the Waveshare AMOLED).
   - Network pill: a 3 px status stripe (green connected, amber connecting or setup, red offline), then the IP address or `connecting` / `no network`. The worst case (`30/30` in the queue pill) still fits the IP address.
   - Before 0.0.12: plain text on black, IP left, position centered, `--%` and `--:--` right.
   - Serial command `B` prints the battery voltage.

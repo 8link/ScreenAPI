@@ -50,6 +50,8 @@ constexpr uint16_t kBlue = 0x4C9F;  // lighter than pure blue, which is hard to 
 constexpr uint16_t kBarBackground = 0x210A;  // dark slate (36, 36, 85)
 constexpr uint16_t kPillBackground = 0x420A;  // slate grey (73, 73, 85)
 constexpr uint16_t kQueueAccent = 0xDC80;     // amber (219, 146, 0)
+constexpr uint16_t kBandBackground = 0x2966;  // cool dark grey (40, 44, 48), rounded boards
+constexpr uint16_t kBandEdge = 0x4208;        // grey line under the band (66, 66, 66)
 
 // Markup tag names in mq::Color order (D-021).
 const char* const kColorNames[] = {"white", "blue", "green", "red"};
@@ -222,7 +224,7 @@ void computeLayout()
     rows.barTop = kRoundedCorners ? kRoundedBarTop : 0;
     rows.barSide = kRoundedCorners ? cornerClearance(rows.barTop + 1, rows.pillRadius) : 0;
     rows.barHeight = rows.barTop + rows.pillHeight + 2;
-    rows.titleTop = rows.barHeight + 3;
+    rows.titleTop = rows.barHeight + (kRoundedCorners ? 6 : 3);  // rounded boards: room below the band
     rows.valueTop = rows.titleTop + fonts[kTitleFont].lineHeight + 4;  // divider line at valueTop - 2
     rows.valueHeight = kHeight - rows.valueTop;
     rows.countdownHeight = fonts[kSmallFont].lineHeight + 4;
@@ -410,7 +412,11 @@ uint16_t linkColor(Link link)
 void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
 {
     const int centerY = layoutRows.barTop + 1 + layoutRows.pillHeight / 2;
-    if (!kRoundedCorners) {
+    if (kRoundedCorners) {
+        // Neutral band from the top edge; the panel's rounded corners trim it.
+        canvas->fillRect(0, 0, kWidth, layoutRows.barHeight + 2, kBandBackground);
+        canvas->drawFastHLine(0, layoutRows.barHeight + 2, kWidth, kBandEdge);
+    } else {
         canvas->fillRect(0, 0, kWidth, layoutRows.barHeight, kBarBackground);
     }
 

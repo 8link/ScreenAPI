@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.22
+**Current firmware version:** 0.0.23
 
 ## Format
 
@@ -39,6 +39,27 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.23 - Add a band behind the top bar on rounded boards
+
+**Date:** 2026-09-24 09:59
+**Author:** Claude Opus 5.5
+**Type:** Display
+
+**Summary:**
+On boards with rounded corners the top bar sits on a cool dark grey band (40, 44, 48) with a grey line under it, so it stands apart from the message (requested by the user). The title starts 3 px lower. The panel's rounded corners trim the band. Square boards are unchanged. The user checked it on the AMOLED: good as is.
+
+**Changes:**
+- `src/screen.cpp` - Band and line on rounded boards; title 3 px lower there.
+- `VERSION` - `0.0.23`.
+- `PROJECT.md` - F-007.
+
+**Verification:**
+- `pio run -j 4`: `waveshare_amoled18` 72 s (flashed), `tdisplay` (flash 1,791,925 bytes, 91.1%), `template` 94 s (flash 1,785,057 bytes, 90.8%); all three images contain `ScreenAPI v0.0.23`.
+- AMOLED: screenshots of a darker first try (24, 28, 24) and the final band; the user confirmed the final band on the panel.
+
+**Git commit:**
+- `v0.0.23 - Add a band behind the top bar on rounded boards`
 
 ## 0.0.22 - Fit top bar and countdown into the AMOLED's rounded corners
 
