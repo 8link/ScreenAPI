@@ -243,6 +243,24 @@ The `show_message` tool takes:
 | `duration_s` | 1 to 86400 | - |
 | `id` | Up to 16 characters; a message with the same id replaces the old one | none |
 
+### Let your agent report its progress
+
+Add these instructions to your project's `CLAUDE.md` (Claude Code) or `AGENTS.md` (Codex, OpenCode). The agent then posts short progress messages while it works. Questions and the final result stay on screen until you deal with them.
+
+```markdown
+## Status messages on the desk display
+
+Report task progress on the ScreenAPI display through its MCP tool `show_message` (server `screen`, `http://screenapi.local/mcp`).
+
+- Task start: a timed message, `duration_s` 10, saying what the task is.
+- Each major step: a timed message, `duration_s` 10.
+- Question or decision for the user (including a plan waiting for approval): a confirm message in blue, so it stays on screen until answered. Say briefly what is being asked; the full question stays in the chat.
+- Task end: a confirm message (no `duration_s`, `kind` confirm), so it stays until the user deletes it. Green when the task succeeded, red when it failed or is blocked.
+- Use one `id` per task (for example `job-<topic>`, at most 16 characters) for the start, step, question, and end messages, so each replaces the previous one; a question disappears with the next update after the answer.
+- Keep titles and values short and ASCII.
+- If the `screen` tool is not available, send the same JSON-RPC `tools/call` with curl. If the display cannot be reached, continue the task and say so in the report.
+```
+
 ### With curl
 
 Any HTTP client can send messages: the MCP endpoint takes plain JSON-RPC over POST, with no session or token. Set the URL once; if `screenapi.local` does not resolve on your machine, use the IP address shown in the top bar.
