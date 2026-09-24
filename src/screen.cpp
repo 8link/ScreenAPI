@@ -123,11 +123,45 @@ StatusBar lastBar;
 bool lastBarValid = false;
 uint64_t popupUntilMs = 0;
 bool popupShown = false;
+bool panelOn = true;
+
+// Screen saver particle hues (F-014) at full brightness. Each is drawn in
+// kParticleLevels - 1 fixed brightness steps, 42 colors in all: the indexed
+// canvas's palette holds 255 colors for the whole run and loses color depth
+// when it overflows, so the animation must reuse the same colors every frame.
+struct Rgb {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+};
+constexpr Rgb kParticleHueRgb[ui::kParticleHues] = {
+    {0, 220, 255},    // cyan
+    {255, 60, 200},   // magenta
+    {255, 170, 0},    // amber
+    {80, 255, 120},   // green
+    {90, 130, 255},   // blue
+    {235, 235, 255},  // white
+};
 
 // QR code modules, copied out of the ESP-IDF encoder's callback.
 constexpr int kQrMaxModules = 37;  // version 5; the provisioning payload needs version 4
 bool qrModules[kQrMaxModules * kQrMaxModules];
 int qrSize = 0;
+
+uint16_t particleColor(uint8_t hue, uint8_t level)
+{
+    const Rgb& rgb = kParticleHueRgb[hue];
+    const int top = kParticleLevels - 1;
+    const int r = rgb.r * level / top;
+    const int g = rgb.g * level / top;
+    const int b = rgb.b * level / top;
+    return static_cast<uint16_t>(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
+}
+
+int pixel(float coordinate)
+{
+    return static_cast<int>(coordinate + 0.5f);
+}
 
 int smaller(int a, int b)
 {
@@ -799,6 +833,65 @@ void showNotice(const char* text)
     canvas->fillScreen(kBlack);
     drawTextMiddle(text, kWidth / 2, kHeight / 2, Align::Center, kSmallFont, kWhite);
     canvas->flush();
+}
+
+void sleep()
+{
+    if (!panelOn) {
+        return;
+    }
+    // The panel keeps its memory while asleep; black there means waking it
+    // never shows an old message for a moment.
+    canvas->fillScreen(kBlack);
+    canvas->flush();
+    hal::setDisplayOn(false);
+    panelOn = false;
+}
+
+void wake()
+{
+    if (panelOn) {
+        return;
+    }
+    hal::setDisplayOn(true);
+    panelOn = true;
+    // A screen drawn while the panel was off (for example the corner test)
+    // reaches it now; the message screen is redrawn in full by update().
+    canvas->flush();
+    lastBarValid = false;
+}
+
+void drawParticles(const ui::ParticleField& field, uint8_t level)
+{
+    // Sizes from the shorter screen side: 1 px trails and a 3 px head at 135 px,
+    // 2 px trails and a 7 px head on the AMOLED's 368 px.
+    constexpr int kSide = kWidth < kHeight ? kWidth : kHeight;
+    constexpr int kHeadRadius = kSide / 120;
+    constexpr bool kWideTrail = kSide >= 300;
+    canvas->fillScreen(kBlack);
+    for (int i = 0; level > 0 && i < field.count(); ++i) {
+        const ui::Particle& p = field.particle(i);
+        // Oldest segment first; each is dimmer the older it is.
+        for (int j = p.trailCount - 1; j > 0; --j) {
+            const uint8_t segment = static_cast<uint8_t>(level * (ui::kTrailLength - j + 1) / ui::kTrailLength);
+            if (segment == 0) {
+                continue;
+            }
+            const uint16_t color = particleColor(p.hue, segment);
+            const int x0 = pixel(p.trail[j].x);
+            const int y0 = pixel(p.trail[j].y);
+            const int x1 = pixel(p.trail[j - 1].x);
+            const int y1 = pixel(p.trail[j - 1].y);
+            canvas->drawLine(x0, y0, x1, y1, color);
+            if (kWideTrail) {
+                canvas->drawLine(x0 + 1, y0, x1 + 1, y1, color);
+                canvas->drawLine(x0, y0 + 1, x1, y1 + 1, color);
+            }
+        }
+        canvas->fillCircle(pixel(p.trail[0].x), pixel(p.trail[0].y), kHeadRadius, particleColor(p.hue, level));
+    }
+    canvas->flush();
+    lastBarValid = false;
 }
 
 }  // namespace screen

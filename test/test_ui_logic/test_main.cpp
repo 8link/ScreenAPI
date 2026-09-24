@@ -3,6 +3,8 @@
 #include <button_tracker.h>
 #include <countdown.h>
 #include <markup.h>
+#include <particles.h>
+#include <screen_saver.h>
 #include <scroll_offset.h>
 #include <string.h>
 #include <text_wrap.h>
@@ -283,6 +285,19 @@ static void test_pair_single_presses_pass_through()
     TEST_ASSERT_EQUAL(PairEvent::None, run(pair, false, false, now, 2200));
 }
 
+static void test_pair_idle_turns_true_with_the_short_press()
+{
+    ButtonPair pair(30, 1500, 5000);
+    TEST_ASSERT_TRUE(pair.idle());
+    TEST_ASSERT_EQUAL(PairEvent::None, pair.update(true, false, 0));
+    TEST_ASSERT_FALSE(pair.idle());
+    pair.update(true, false, 100);
+    TEST_ASSERT_EQUAL(PairEvent::None, pair.update(false, false, 200));
+    TEST_ASSERT_FALSE(pair.idle());  // release not yet debounced
+    TEST_ASSERT_EQUAL(PairEvent::FirstShort, pair.update(false, false, 230));
+    TEST_ASSERT_TRUE(pair.idle());
+}
+
 static void test_pair_both_held_fires_once_and_suppresses_singles()
 {
     ButtonPair pair(30, 1500, 5000);
@@ -346,6 +361,115 @@ static void test_battery_level_curve()
     TEST_ASSERT_EQUAL(0, batteryLevel(0).percent);
 }
 
+static void test_particles_count_scales_with_area()
+{
+    ParticleField field;
+    field.start(240, 135, 7);
+    TEST_ASSERT_EQUAL(10, field.count());
+    field.start(368, 448, 7);
+    TEST_ASSERT_EQUAL(20, field.count());
+}
+
+static void test_particles_same_seed_same_start()
+{
+    ParticleField a;
+    ParticleField b;
+    a.start(240, 135, 42);
+    b.start(240, 135, 42);
+    TEST_ASSERT_EQUAL_FLOAT(a.particle(3).trail[0].x, b.particle(3).trail[0].x);
+    TEST_ASSERT_EQUAL_FLOAT(a.particle(3).trail[0].y, b.particle(3).trail[0].y);
+    b.start(240, 135, 43);
+    TEST_ASSERT_TRUE(a.particle(3).trail[0].x != b.particle(3).trail[0].x);
+}
+
+static void test_particles_stay_on_screen_and_trails_are_capped()
+{
+    ParticleField field;
+    field.start(240, 135, 12345);
+    for (int frame = 0; frame < 2000; ++frame) {
+        field.step(0.04f);
+    }
+    for (int i = 0; i < field.count(); ++i) {
+        const Particle& p = field.particle(i);
+        TEST_ASSERT_EQUAL(kTrailLength, p.trailCount);
+        TEST_ASSERT_TRUE(p.hue < kParticleHues);
+        for (int j = 0; j < p.trailCount; ++j) {
+            TEST_ASSERT_TRUE(p.trail[j].x >= 0.0f && p.trail[j].x <= 239.0f);
+            TEST_ASSERT_TRUE(p.trail[j].y >= 0.0f && p.trail[j].y <= 134.0f);
+        }
+    }
+}
+
+static void test_particles_trail_follows_the_head()
+{
+    ParticleField field;
+    field.start(368, 448, 9);
+    const Point first = field.particle(0).trail[0];
+    field.step(0.04f);
+    TEST_ASSERT_EQUAL(2, field.particle(0).trailCount);
+    TEST_ASSERT_EQUAL_FLOAT(first.x, field.particle(0).trail[1].x);
+    TEST_ASSERT_EQUAL_FLOAT(first.y, field.particle(0).trail[1].y);
+}
+
+static void test_fade_level_ramps_in_and_out()
+{
+    TEST_ASSERT_EQUAL(0, fadeLevel(0, 5000, 600, 7));
+    TEST_ASSERT_EQUAL(3, fadeLevel(300, 5000, 600, 7));
+    TEST_ASSERT_EQUAL(7, fadeLevel(600, 5000, 600, 7));
+    TEST_ASSERT_EQUAL(7, fadeLevel(2500, 5000, 600, 7));
+    TEST_ASSERT_EQUAL(3, fadeLevel(4700, 5000, 600, 7));
+    TEST_ASSERT_EQUAL(0, fadeLevel(5000, 5000, 600, 7));
+    TEST_ASSERT_EQUAL(7, fadeLevel(10, 5000, 0, 7));
+}
+
+static void test_saver_goes_dark_after_idle_time()
+{
+    ScreenSaver saver(60000, 30000, 5000);
+    TEST_ASSERT_TRUE(saver.update(1000, true, false) == SaverPhase::Awake);
+    TEST_ASSERT_TRUE(saver.update(60999, true, false) == SaverPhase::Awake);
+    TEST_ASSERT_TRUE(saver.update(61000, true, false) == SaverPhase::Dark);
+}
+
+static void test_saver_idle_time_restarts_on_content_or_press()
+{
+    ScreenSaver saver(60000, 30000, 5000);
+    saver.update(0, true, false);
+    TEST_ASSERT_TRUE(saver.update(50000, false, false) == SaverPhase::Awake);
+    TEST_ASSERT_TRUE(saver.update(51000, true, false) == SaverPhase::Awake);
+    TEST_ASSERT_TRUE(saver.update(80000, true, true) == SaverPhase::Awake);
+    // The idle time restarts when the input is released.
+    TEST_ASSERT_TRUE(saver.update(80005, true, false) == SaverPhase::Awake);
+    TEST_ASSERT_TRUE(saver.update(140004, true, false) == SaverPhase::Awake);
+    TEST_ASSERT_TRUE(saver.update(140005, true, false) == SaverPhase::Dark);
+}
+
+static void test_saver_animates_every_period()
+{
+    ScreenSaver saver(60000, 30000, 5000);
+    saver.update(0, true, false);
+    saver.update(60000, true, false);  // dark
+    TEST_ASSERT_TRUE(saver.update(89999, true, false) == SaverPhase::Dark);
+    TEST_ASSERT_TRUE(saver.update(90000, true, false) == SaverPhase::Animating);
+    TEST_ASSERT_EQUAL_UINT64(90000, saver.animationStartMs());
+    TEST_ASSERT_TRUE(saver.update(94999, true, false) == SaverPhase::Animating);
+    TEST_ASSERT_TRUE(saver.update(95000, true, false) == SaverPhase::Dark);
+    TEST_ASSERT_TRUE(saver.update(119999, true, false) == SaverPhase::Dark);
+    TEST_ASSERT_TRUE(saver.update(120000, true, false) == SaverPhase::Animating);
+}
+
+static void test_saver_wakes_on_message_or_press()
+{
+    ScreenSaver saver(60000, 30000, 5000);
+    saver.update(0, true, false);
+    saver.update(60000, true, false);
+    TEST_ASSERT_TRUE(saver.update(70000, false, false) == SaverPhase::Awake);
+    saver.update(70001, true, false);
+    saver.update(130001, true, false);
+    saver.update(160001, true, false);  // animating
+    TEST_ASSERT_TRUE(saver.phase() == SaverPhase::Animating);
+    TEST_ASSERT_TRUE(saver.update(161000, true, true) == SaverPhase::Awake);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -373,11 +497,21 @@ int main()
     RUN_TEST(test_markup_unclosed_brace_is_literal);
     RUN_TEST(test_markup_color_spans_newline);
     RUN_TEST(test_pair_single_presses_pass_through);
+    RUN_TEST(test_pair_idle_turns_true_with_the_short_press);
     RUN_TEST(test_pair_both_held_fires_once_and_suppresses_singles);
     RUN_TEST(test_pair_short_both_press_reports_nothing);
     RUN_TEST(test_pair_staggered_release_reports_nothing);
     RUN_TEST(test_pair_release_settling_after_a_long_pause);
     RUN_TEST(test_battery_level_external_power);
     RUN_TEST(test_battery_level_curve);
+    RUN_TEST(test_particles_count_scales_with_area);
+    RUN_TEST(test_particles_same_seed_same_start);
+    RUN_TEST(test_particles_stay_on_screen_and_trails_are_capped);
+    RUN_TEST(test_particles_trail_follows_the_head);
+    RUN_TEST(test_fade_level_ramps_in_and_out);
+    RUN_TEST(test_saver_goes_dark_after_idle_time);
+    RUN_TEST(test_saver_idle_time_restarts_on_content_or_press);
+    RUN_TEST(test_saver_animates_every_period);
+    RUN_TEST(test_saver_wakes_on_message_or_press);
     return UNITY_END();
 }

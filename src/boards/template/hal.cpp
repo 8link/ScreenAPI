@@ -52,6 +52,23 @@ Fonts fonts()
     return Fonts{u8g2_font_helvR14_tr, u8g2_font_helvR14_tr, u8g2_font_helvR14_tr, u8g2_font_helvR24_tr};
 }
 
+void setDisplayOn(bool on)
+{
+    // PORT: panel sleep and backlight. For an AMOLED without a backlight, the
+    // panel's displayOff() and displayOn() alone (see waveshare_amoled18).
+    if (!on) {
+        if (LCD_BL >= 0) {
+            digitalWrite(LCD_BL, LOW);
+        }
+        display()->displayOff();
+    } else {
+        display()->displayOn();
+        if (LCD_BL >= 0) {
+            digitalWrite(LCD_BL, HIGH);
+        }
+    }
+}
+
 bool deletePressed()
 {
     return digitalRead(PIN_BUTTON_DELETE) == LOW;

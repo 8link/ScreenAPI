@@ -2,6 +2,7 @@
 #pragma once
 
 #include <message_queue.h>
+#include <particles.h>
 #include <stdint.h>
 
 #include <Print.h>
@@ -61,5 +62,19 @@ void showCornerTest();
 
 // One centered line of text on an otherwise empty screen.
 void showNotice(const char* text);
+
+// Screen saver (F-014). sleep() draws a black frame and turns the panel off;
+// wake() turns it back on with the current frame, and the next update() draws
+// a full frame. Both do nothing if the panel is already in that state.
+void sleep();
+void wake();
+
+// Brightness steps of the particle animation: 0 draws a black frame,
+// kParticleLevels - 1 is full brightness.
+constexpr uint8_t kParticleLevels = 8;
+
+// One animation frame: every particle's trail fades from its head, all at the
+// given brightness level. The panel must be awake.
+void drawParticles(const ui::ParticleField& field, uint8_t level);
 
 }  // namespace screen

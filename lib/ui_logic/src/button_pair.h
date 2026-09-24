@@ -23,6 +23,10 @@ public:
     // clears, or scrolls.
     PairEvent update(bool firstPressed, bool secondPressed, uint64_t nowMs);
 
+    // True when both buttons are released and settled. A short press is
+    // reported by the update() call after which idle() turns true.
+    bool idle() const { return first_.idle() && second_.idle(); }
+
 private:
     ButtonTracker first_;
     ButtonTracker second_;

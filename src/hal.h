@@ -54,6 +54,12 @@ Arduino_GFX* display();
 int32_t displaySpeedHz();
 Fonts fonts();
 
+// Screen saver (F-014): false puts the panel to sleep and turns its backlight
+// off, true wakes it. The panel keeps its memory, so the screen module flushes
+// a black frame before sleeping. May block for a few hundred ms (panel sleep
+// in and out delays).
+void setDisplayOn(bool on);
+
 // Raw input state, true while pressed; called every loop (about every 5 ms).
 // Debouncing, short and long presses, and the two-input Wi-Fi reset are
 // handled in shared code. Delete: short press deletes the shown message, hold

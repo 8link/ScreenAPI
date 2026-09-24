@@ -180,6 +180,17 @@ Fonts fonts()
     return Fonts{u8g2_font_helvR14_tr, u8g2_font_fub20_tr, u8g2_font_helvR18_tr, u8g2_font_helvR24_tr};
 }
 
+void setDisplayOn(bool on)
+{
+    // An AMOLED has no backlight: DISPOFF and SLPIN switch the pixels off and
+    // stop the panel's own scanning, which is where it draws power on black.
+    if (on) {
+        display()->displayOn();
+    } else {
+        display()->displayOff();
+    }
+}
+
 bool deletePressed()
 {
     return digitalRead(PIN_BUTTON_DELETE) == LOW;

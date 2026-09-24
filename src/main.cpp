@@ -3,6 +3,9 @@
 #include <button_pair.h>
 #include <esp_timer.h>
 #include <message_queue.h>
+#include <particles.h>
+#include <screen_saver.h>
+#include <soc/rtc.h>
 
 #include "clock.h"
 #include "mcp_server.h"
@@ -23,6 +26,16 @@ constexpr uint32_t kWelcomeMs = 3000;
 constexpr uint32_t kCornerTestMs = 60000;
 constexpr uint32_t kIpMessageS = 60;  // on-screen time of the IP message (D-027)
 constexpr uint32_t kBatteryReadMs = 10000;
+// Screen saver (F-014): the panel goes off after the queue has been empty this
+// long, and every period it shows a short particle animation.
+constexpr uint32_t kSaverIdleMs = 60000;
+constexpr uint32_t kSaverPeriodMs = 30000;
+constexpr uint32_t kSaverAnimationMs = 5000;
+constexpr uint32_t kSaverFadeMs = 600;
+constexpr uint32_t kSaverFrameMs = 40;
+// CPU clock (F-014): 80 MHz is the lowest at which Wi-Fi runs.
+constexpr uint32_t kCpuMhz = 160;
+constexpr uint32_t kSaverCpuMhz = 80;
 
 mq::MessageQueue queue;
 ui::ButtonPair buttons(kDebounceMs, kLongPressMs, kWifiResetHoldMs);  // first: delete, second: scroll
@@ -40,6 +53,13 @@ char announcedIp[16] = "";
 hal::Battery battery{false, 0, 0};
 bool batteryKnown = false;
 uint64_t lastBatteryReadMs = 0;
+ui::ScreenSaver saver(kSaverIdleMs, kSaverPeriodMs, kSaverAnimationMs);
+ui::SaverPhase saverPhase = ui::SaverPhase::Awake;
+ui::ParticleField particles;
+bool swallowPress = false;  // a press that woke the screen does nothing else
+uint64_t lastParticleFrameMs = 0;
+uint32_t particleFrames = 0;
+uint64_t particleRenderUs = 0;
 
 // 64-bit uptime; millis() is 32-bit and wraps after about 49.7 days.
 uint64_t nowMs()
@@ -236,6 +256,72 @@ screen::StatusBar statusBar()
     return bar;
 }
 
+// Arduino's setCpuFrequencyMhz() uses the fast switch, which on the ESP32-S3
+// with octal PSRAM froze the M5StickS3 at 80 MHz (BOARDS.md Q-012). The full
+// switch reconfigures the PLL as well; measured by cycle count at 80 and 160 MHz.
+// APB stays at 80 MHz at both clocks, so no peripheral needs reconfiguring.
+void setCpuMhz(uint32_t mhz)
+{
+    rtc_cpu_freq_config_t config;
+    if (!rtc_clk_cpu_freq_mhz_to_config(mhz, &config)) {
+        Serial.printf("CPU clock %u MHz not supported\n", static_cast<unsigned>(mhz));
+        return;
+    }
+    rtc_clk_cpu_freq_set_config(&config);
+}
+
+// Applies a screen saver phase change (F-014). Returns true if the message
+// screen is back and must be redrawn.
+bool enterSaverPhase(ui::SaverPhase phase, uint64_t now)
+{
+    if (phase == saverPhase) {
+        return false;
+    }
+    const ui::SaverPhase previous = saverPhase;
+    saverPhase = phase;
+    switch (phase) {
+    case ui::SaverPhase::Awake:
+        screen::wake();
+        setCpuMhz(kCpuMhz);
+        Serial.printf("Screen saver off, CPU %u MHz\n", static_cast<unsigned>(getCpuFrequencyMhz()));
+        return true;
+    case ui::SaverPhase::Dark:
+        if (previous == ui::SaverPhase::Animating && particleFrames > 0) {
+            Serial.printf("Screen saver: %u frames, %u ms per frame to draw\n", static_cast<unsigned>(particleFrames),
+                          static_cast<unsigned>(particleRenderUs / particleFrames / 1000));
+        }
+        screen::sleep();
+        if (previous == ui::SaverPhase::Awake) {
+            setCpuMhz(kSaverCpuMhz);
+            Serial.printf("Screen saver on, CPU %u MHz\n", static_cast<unsigned>(getCpuFrequencyMhz()));
+        }
+        return false;
+    case ui::SaverPhase::Animating:
+        particles.start(board::kScreenWidth, board::kScreenHeight, esp_random());
+        screen::wake();
+        lastParticleFrameMs = now;
+        particleFrames = 0;
+        particleRenderUs = 0;
+        return false;
+    }
+    return false;
+}
+
+void runAnimation(uint64_t now)
+{
+    if (now - lastParticleFrameMs < kSaverFrameMs) {
+        return;
+    }
+    particles.step(static_cast<float>(now - lastParticleFrameMs) / 1000.0f);
+    lastParticleFrameMs = now;
+    const uint8_t level = ui::fadeLevel(static_cast<uint32_t>(now - saver.animationStartMs()), kSaverAnimationMs,
+                                        kSaverFadeMs, screen::kParticleLevels - 1);
+    const int64_t startUs = esp_timer_get_time();
+    screen::drawParticles(particles, level);
+    particleRenderUs += static_cast<uint64_t>(esp_timer_get_time() - startUs);
+    ++particleFrames;
+}
+
 void scheduleSave(uint64_t now)
 {
     saveDue = true;
@@ -258,8 +344,11 @@ void saveIfDue(uint64_t now)
 
 void setup()
 {
+    // Before Serial: the UART clock (APB, 80 MHz) is the same at 160 and 80 MHz.
+    setCpuMhz(kCpuMhz);
     Serial.begin(115200);
-    Serial.printf("ScreenAPI v%s on %s\n", FW_VERSION, board::kName);
+    Serial.printf("ScreenAPI v%s on %s, CPU %u MHz\n", FW_VERSION, board::kName,
+                  static_cast<unsigned>(getCpuFrequencyMhz()));
     hal::begin();
     Serial.printf("Hardware: %s\n", hal::description());
 
@@ -287,10 +376,21 @@ void loop()
     handleSerialCommands(now);
     // Buttons are read in every mode so their state stays consistent; events
     // are ignored while the setup or welcome screen is shown.
-    const ui::PairEvent event =
-        buttons.update(hal::deletePressed(), hal::scrollPressed(), now);
+    ui::PairEvent event = buttons.update(hal::deletePressed(), hal::scrollPressed(), now);
+    const bool inputActive = !buttons.idle();
+    // A press while the screen saver runs only wakes the screen (F-014): its
+    // events, including the release, are dropped until the inputs settle.
+    if (saverPhase != ui::SaverPhase::Awake && inputActive) {
+        swallowPress = true;
+    }
+    if (swallowPress) {
+        event = ui::PairEvent::None;
+        swallowPress = inputActive;
+    }
 
     if (network::state() == network::State::Setup) {
+        saver.update(now, false, false);
+        enterSaverPhase(ui::SaverPhase::Awake, now);
         runSetupScreen();
         saveIfDue(now);
         delay(20);
@@ -330,7 +430,11 @@ void loop()
     }
     saveIfDue(now);
 
-    if (!covered) {
+    const bool idle = !covered && queue.empty();
+    redraw |= enterSaverPhase(saver.update(now, idle, inputActive), now);
+    if (saverPhase == ui::SaverPhase::Animating) {
+        runAnimation(now);
+    } else if (saverPhase == ui::SaverPhase::Awake && !covered) {
         redraw |= coverShown;
         coverShown = false;
         readBatteryIfDue(now);

@@ -58,6 +58,19 @@ Fonts fonts()
     return Fonts{u8g2_font_helvR12_tr, u8g2_font_helvR12_tr, u8g2_font_helvR12_tr, u8g2_font_helvR18_tr};
 }
 
+void setDisplayOn(bool on)
+{
+    // Backlight off before the panel sleeps and on only after it has woken
+    // (SLPIN and SLPOUT take 120 ms each), so the transition is not visible.
+    if (!on) {
+        digitalWrite(TFT_BL, LOW);
+        display()->displayOff();
+    } else {
+        display()->displayOn();
+        digitalWrite(TFT_BL, HIGH);
+    }
+}
+
 bool deletePressed()
 {
     return digitalRead(PIN_BUTTON_DELETE) == LOW;
