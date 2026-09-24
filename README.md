@@ -5,6 +5,12 @@
   <img src="images/screenapi-lcd.jpg" alt="ScreenAPI on a small landscape LCD board: a Docs untracked message in green" width="49%">
 </p>
 
+<p align="center">
+  If ScreenAPI is useful to you, a coffee helps a lot. Projects like this need real boards to test on and many evenings to get right.
+  <br><br>
+  <a href="https://buymeacoffee.com/eucbuddy"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=%E2%98%95&slug=eucbuddy&button_colour=FFDD00&font_colour=000000&font_family=Poppins&outline_colour=000000&coffee_colour=ffffff" alt="Buy me a coffee" height="45"></a>
+</p>
+
 **A small Wi-Fi desk display for your AI agents.** An ESP32 board with a screen runs an [MCP](https://modelcontextprotocol.io) server on your local network. Claude Code, Codex, OpenCode, or any other MCP client sends it status messages, and the device takes care of showing them: queuing, scrolling, colors, timers, and button or touch controls.
 
 ![PlatformIO](https://img.shields.io/badge/build-PlatformIO-orange)
