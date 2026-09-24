@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.23
+**Current firmware version:** 0.0.24
 
 ## Format
 
@@ -39,6 +39,30 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.24 - Restyle the message title
+
+**Date:** 2026-09-24 11:52
+**Author:** Claude Opus 5.5
+**Type:** Display
+
+**Summary:**
+The message title is white with a thin grey line under it, and the value's default "white" text is drawn light grey (198, 195, 198) so the title stands out (D-037). On the Waveshare AMOLED the title uses the larger bold `fub20` font and sits 2 px lower, with 5 px between the line and the text. A long title scrolls within the line's width, clear of the rounded corners. The user asked for a larger title set apart from the text; after several rejected styles (a light band, blue lines, a title card, a blue title, mockups of other layouts) they chose this one and confirmed it on the panel. The T-Display keeps its row positions; only its colors change.
+
+**Changes:**
+- `src/screen.cpp` - White title, grey line under it, light grey default value color, title area clear of rounded corners and clipped when scrolling.
+- `src/boards/waveshare_amoled18/hal.cpp` - Title font `fub20`.
+- `VERSION` - `0.0.24`.
+- `PROJECT.md` - Screen layout, F-005, D-037.
+- `README.md` - `color` parameter note.
+
+**Verification:**
+- `pio test -e native`: 81 of 81 passed.
+- `pio run -j 4`: `waveshare_amoled18` (flash 1,585,573 bytes, 24.2%), `tdisplay` (flash 1,792,005 bytes, 91.1%), `template` (flash 1,785,097 bytes, 90.8%); all three images contain `ScreenAPI v0.0.24`. The T-Display was not checked on the device.
+- AMOLED: flashed; screenshots of a short title and a scrolling long title; the user confirmed the final style on the panel.
+
+**Git commit:**
+- `v0.0.24 - Restyle the message title`
 
 ## 0.0.23 - Add a band behind the top bar on rounded boards
 

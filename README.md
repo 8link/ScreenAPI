@@ -180,7 +180,7 @@ The `show_message` tool takes:
 |-------|--------|---------|
 | `value` | Text, up to 512 characters; newlines and `{green}...{/}` color tags allowed | required |
 | `title` | One line, up to 64 characters; scrolls sideways if too long | empty |
-| `color` | `white`, `blue`, `green`, `red` | `white` |
+| `color` | `white` (drawn light grey, below the white title), `blue`, `green`, `red` | `white` |
 | `font_size` | `small`, `large` | `small` |
 | `kind` | `timed` (removed after its time on screen) or `confirm` (stays until deleted) | `timed` if `duration_s` is given, else `confirm` |
 | `duration_s` | 1 to 86400 | - |

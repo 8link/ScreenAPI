@@ -45,6 +45,8 @@ constexpr uint16_t kBlack = 0x0000;
 constexpr uint16_t kWhite = 0xFFFF;
 constexpr uint16_t kDarkGrey = 0x7BEF;
 constexpr uint16_t kBlue = 0x4C9F;  // lighter than pure blue, which is hard to read on black
+constexpr uint16_t kTextGrey = 0xC618;   // message text, "white" in markup (198, 195, 198)
+constexpr uint16_t kTitleRule = 0x4208;  // grey line under the title (66, 66, 66)
 
 // Top bar colors (D-028).
 constexpr uint16_t kBarBackground = 0x210A;  // dark slate (36, 36, 85)
@@ -78,6 +80,9 @@ struct Layout {
     int pillRadius;
     int countdownRadius;
     int countdownMargin;  // inset of the countdown box from the bottom right corner
+    int titleLeft;        // title text area, clear of rounded corners; the rule under
+    int titleWidth;       // the title spans the same width
+    int ruleTop;
     int pillHeight;
     int barHeight;
     int titleTop;
@@ -224,8 +229,16 @@ void computeLayout()
     rows.barTop = kRoundedCorners ? kRoundedBarTop : 0;
     rows.barSide = kRoundedCorners ? cornerClearance(rows.barTop + 1, rows.pillRadius) : 0;
     rows.barHeight = rows.barTop + rows.pillHeight + 2;
-    rows.titleTop = rows.barHeight + (kRoundedCorners ? 6 : 3);  // rounded boards: room below the band
-    rows.valueTop = rows.titleTop + fonts[kTitleFont].lineHeight + 4;  // divider line at valueTop - 2
+    // Title: white, with a grey rule under it; both clear of rounded corners.
+    rows.titleTop = rows.barHeight + (kRoundedCorners ? 8 : 3);  // rounded boards: room below the band
+    rows.titleLeft = kMargin;
+    if (kRoundedCorners) {
+        const int clearance = cornerClearance(rows.titleTop, 0);
+        rows.titleLeft = clearance > kMargin ? clearance : kMargin;
+    }
+    rows.titleWidth = kWidth - 2 * rows.titleLeft;
+    rows.ruleTop = rows.titleTop + fonts[kTitleFont].lineHeight + 2;
+    rows.valueTop = rows.ruleTop + (kRoundedCorners ? 5 : 2);
     rows.valueHeight = kHeight - rows.valueTop;
     rows.countdownHeight = fonts[kSmallFont].lineHeight + 4;
     rows.countdownRadius = kRoundedCorners ? rows.countdownHeight / 2 : 3;
@@ -249,7 +262,7 @@ uint16_t colorFor(mq::Color color)
     case mq::Color::White:
         break;
     }
-    return kWhite;
+    return kTextGrey;  // a bit darker than the white title
 }
 
 int measureText(const char* text, size_t length, void* context)
@@ -280,7 +293,7 @@ void layout(const mq::Message& message, uint64_t nowMs)
 
 bool isScrolling()
 {
-    return shown.valid && (shown.titleWidth > kTextWidth ||
+    return shown.valid && (shown.titleWidth > layoutRows.titleWidth ||
                            static_cast<int>(shown.lineCount) * shown.lineHeight > layoutRows.valueHeight);
 }
 
@@ -464,9 +477,14 @@ void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
 
 void drawTitle(uint64_t elapsedMs)
 {
-    const int offset = ui::scrollOffset(shown.titleWidth, kTextWidth, elapsedMs, kTitleSpeedPxPerS, kScrollPauseMs);
-    drawText(shown.title, kMargin - offset, layoutRows.titleTop, Align::Left, kTitleFont, kColorLightGrey);
-    canvas->drawFastHLine(0, layoutRows.valueTop - 2, kWidth, kDarkGrey);
+    const Layout& rows = layoutRows;
+    const int offset = ui::scrollOffset(shown.titleWidth, rows.titleWidth, elapsedMs, kTitleSpeedPxPerS, kScrollPauseMs);
+    drawText(shown.title, rows.titleLeft - offset, rows.titleTop, Align::Left, kTitleFont, kWhite);
+    // Clip a scrolling title to the rule's width.
+    const int right = rows.titleLeft + rows.titleWidth;
+    canvas->fillRect(0, rows.titleTop, rows.titleLeft, rows.ruleTop - rows.titleTop, kBlack);
+    canvas->fillRect(right, rows.titleTop, kWidth - right, rows.ruleTop - rows.titleTop, kBlack);
+    canvas->drawFastHLine(rows.titleLeft, rows.ruleTop, rows.titleWidth, kTitleRule);
 }
 
 void drawQueueFullPopup()

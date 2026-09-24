@@ -161,7 +161,7 @@ int32_t displaySpeedHz()
 // ASCII u8g2 fonts, sized for 368 x 448 on 1.8 inch (about 330 ppi).
 Fonts fonts()
 {
-    return Fonts{u8g2_font_helvR14_tr, u8g2_font_helvR18_tr, u8g2_font_helvR18_tr, u8g2_font_helvR24_tr};
+    return Fonts{u8g2_font_helvR14_tr, u8g2_font_fub20_tr, u8g2_font_helvR18_tr, u8g2_font_helvR24_tr};
 }
 
 bool deletePressed()
