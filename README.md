@@ -66,26 +66,26 @@ flowchart LR
 | **Lifecycle** | *Timed* messages count down only while they are on screen, with the time left in a small box. *Confirm* messages stay until deleted. A message with the same `id` replaces the old one, so a status update never fills the queue. |
 | **Queue** | 30 messages, newest first, saved to flash and restored after a reboot. When full, new messages are dropped, a popup says so, and the sender is told. |
 | **Screen** | Top bar with connection status, IP address, queue position, battery, and clock (NTP, timezone from your IP). Long titles scroll sideways, long text scrolls down. Flicker-free, full-frame buffered drawing. |
-| **Sound** | A short two-note chime for every message sent to the display, on boards with a speaker (Waveshare AMOLED). |
+| **Sound** | A short two-note chime for every message sent to the display, on boards with a speaker (Waveshare AMOLED, M5StickS3). |
 | **Controls** | Delete the shown message, hold to clear all, show the next message; hold both inputs for 5 s to reset Wi-Fi. |
 | **Setup** | Wi-Fi via the ESP BLE Provisioning app: scan the QR code on the screen. A welcome screen shows the IP address and MCP URL. |
 
 ## Hardware
 
-ScreenAPI runs on ESP32-family boards with Wi-Fi, BLE, and a display. Two boards are supported today; the firmware is structured so that adding more is mostly configuration (see [Built to be ported](#built-to-be-ported)).
+ScreenAPI runs on ESP32-family boards with Wi-Fi, BLE, and a display. Three boards are supported today; the firmware is structured so that adding more is mostly configuration (see [Built to be ported](#built-to-be-ported)).
 
-| | LilyGO TTGO T-Display | Waveshare ESP32-S3-Touch-AMOLED-1.8 |
-|---|---|---|
-| **Chip** | ESP32 (dual-core LX6, 240 MHz) | ESP32-S3 (dual-core LX7, 240 MHz) |
-| **Memory** | 4 MB flash, no PSRAM | 16 MB flash, 8 MB PSRAM |
-| **Display** | 1.14 inch IPS LCD, ST7789, 240 x 135, SPI | 1.8 inch AMOLED, 368 x 448, QSPI (CO5300 or SH8601) |
-| **Orientation** | Landscape | Portrait |
-| **Input** | Two buttons | BOOT button and capacitive touchscreen |
-| **Battery** | Li-ion connector, voltage via ADC | Li-ion connector, AXP2101 power management chip |
-| **Sound** | None | ES8311 codec and speaker: chime on new messages |
-| **USB** | USB-C with a USB-UART bridge | USB-C, native USB serial |
-| **PlatformIO env** | `tdisplay` | `waveshare_amoled18` |
-| **Status** | Verified on the device up to firmware 0.0.14 | Boots and runs Wi-Fi setup since 0.0.16 |
+| | LilyGO TTGO T-Display | Waveshare ESP32-S3-Touch-AMOLED-1.8 | M5Stack M5StickS3 |
+|---|---|---|---|
+| **Chip** | ESP32 (dual-core LX6, 240 MHz) | ESP32-S3 (dual-core LX7, 240 MHz) | ESP32-S3-PICO-1 (dual-core LX7, 240 MHz) |
+| **Memory** | 4 MB flash, no PSRAM | 16 MB flash, 8 MB PSRAM | 8 MB flash, 8 MB PSRAM |
+| **Display** | 1.14 inch IPS LCD, ST7789, 240 x 135, SPI | 1.8 inch AMOLED, 368 x 448, QSPI (CO5300 or SH8601) | 1.14 inch IPS LCD, ST7789P3, 240 x 135, SPI |
+| **Orientation** | Landscape | Portrait | Landscape |
+| **Input** | Two buttons | BOOT button and capacitive touchscreen | Two buttons (front and side) |
+| **Battery** | Li-ion connector, voltage via ADC | Li-ion connector, AXP2101 power management chip | Built-in 250 mAh cell, M5PM1 power management chip |
+| **Sound** | None | ES8311 codec and speaker: chime on new messages | ES8311 codec and speaker: chime on new messages |
+| **USB** | USB-C with a USB-UART bridge | USB-C, native USB serial | USB-C, native USB serial |
+| **PlatformIO env** | `tdisplay` | `waveshare_amoled18` | `m5sticks3` |
+| **Status** | Verified on the device up to firmware 0.0.14 | Boots and runs Wi-Fi setup since 0.0.16 | Added in 0.0.28 |
 
 ### LilyGO TTGO T-Display
 
@@ -103,6 +103,15 @@ A larger, high-density AMOLED touch board with plenty of memory. ScreenAPI uses 
 - **Battery:** percentage, USB, and charge state from the AXP2101 power chip.
 - **Sound:** a two-note chime when a message arrives, through the ES8311 codec and the onboard speaker.
 - **Vendor:** [Waveshare ESP32-S3-Touch-AMOLED-1.8](https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.8)
+
+### M5Stack M5StickS3
+
+A pocket-sized ESP32-S3 stick with a small LCD, two buttons, a speaker, and a built-in battery. ScreenAPI uses it in landscape with the same layout as the T-Display.
+
+- **Controls:** the front button (KEY1) deletes the shown message, hold 1.5 s to clear all; the side button (KEY2) shows the next message; both held for 5 s reset Wi-Fi. The separate power button is left to the board.
+- **Battery:** cell voltage and USB presence from the M5PM1 power chip, which also switches the display supply and the speaker amplifier.
+- **Sound:** the same two-note chime as the AMOLED, through its ES8311 codec.
+- **Vendor:** [M5Stack M5StickS3](https://docs.m5stack.com/en/core/StickS3)
 
 ## Built to be ported
 
@@ -153,6 +162,9 @@ pio run -e tdisplay -j 2 -t upload
 
 # Waveshare ESP32-S3-Touch-AMOLED-1.8 (always pass -e: the default env is the T-Display)
 pio run -e waveshare_amoled18 -j 2 -t upload --upload-port /dev/ttyACM0
+
+# M5Stack M5StickS3 (also /dev/ttyACM0: check which board is connected before flashing)
+pio run -e m5sticks3 -j 2 -t upload --upload-port /dev/ttyACM0
 ```
 
 `-j 2` limits parallel compiler jobs; the U8g2 font source needs about 1 GB of RAM per job.
