@@ -19,17 +19,6 @@
 ![Boards](https://img.shields.io/badge/boards-ESP32%20%7C%20ESP32--S3-lightgrey)
 ![Version](https://img.shields.io/badge/firmware-0.0.18-blue)
 
-```text
-+----------------------------------------------+
-| [|] 192.168.x.x   [ 2/5 ] [bat] [ 14:32 ]    |
-| Claude Code                                  |
-|----------------------------------------------|
-| Build passed, 81 of 81 tests green.          |
-| Flashing the AMOLED board next.              |
-|                                       [ 8s ] |
-+----------------------------------------------+
-```
-
 ---
 
 ## Contents
