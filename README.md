@@ -189,13 +189,57 @@ The `show_message` tool takes:
 | `duration_s` | 1 to 86400 | - |
 | `id` | Up to 16 characters; a message with the same id replaces the old one | none |
 
-Any HTTP client works too:
+### With curl
+
+Any HTTP client can send messages: the MCP endpoint takes plain JSON-RPC over POST, with no session or token. Set the URL once; if `screenapi.local` does not resolve on your machine, use the IP address shown in the top bar.
 
 ```sh
-curl -s http://screenapi.local/mcp -H 'Content-Type: application/json' -d '{
-  "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-  "params": {"name": "show_message", "arguments": {
-    "id": "build", "title": "CI", "value": "Build {green}passed{/}", "duration_s": 30}}}'
+URL=http://screenapi.local/mcp    # or http://<ip-in-the-top-bar>/mcp
+```
+
+```sh
+# Plain message; stays until you delete it on the device (confirm)
+curl -s $URL -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"show_message","arguments":{"value":"Hello from curl"}}}'
+
+# Timed message with a title: removed after 30 s on screen
+curl -s $URL -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"show_message","arguments":{"title":"Coffee","value":"The coffee is ready","duration_s":30}}}'
+
+# Large red text that must be confirmed
+curl -s $URL -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"show_message","arguments":{"title":"Alert","value":"Server down","color":"red","font_size":"large","kind":"confirm"}}}'
+
+# Inline colors and a second line (\n)
+curl -s $URL -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"show_message","arguments":{"title":"CI","value":"Build {green}passed{/}\n2 {red}warnings{/}, 0 {blue}notes{/}","duration_s":60}}}'
+
+# Progress that updates in place: the same id replaces the message instead of adding one
+curl -s $URL -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"show_message","arguments":{"id":"backup","title":"Backup","value":"Step 1 of 3: copying","duration_s":120}}}'
+curl -s $URL -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"show_message","arguments":{"id":"backup","title":"Backup","value":"{green}Done{/}","kind":"confirm"}}}'
+
+# How many messages are queued
+curl -s $URL -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"queue_status","arguments":{}}}'
+
+# List the tools and their parameters
+curl -s $URL -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+Each call answers with JSON; the text in `result.content` says what happened, for example `Shown on the display. Queue: 3 of 30 messages.` A rejected message comes back with `"isError": true` and the reason, such as a full queue or a value over 512 characters.
+
+For quick notes from a terminal, a shell function (the text must not contain double quotes or backslashes):
+
+```sh
+screen() {
+  curl -s http://screenapi.local/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,
+    "method":"tools/call","params":{"name":"show_message","arguments":{"value":"'"$1"'","duration_s":'"${2:-30}"'}}}'
+  echo
+}
+
+screen "Tea is ready" 60    # 60 s on screen; without a number, 30 s
 ```
 
 This repository's [AGENTS.md](AGENTS.md) includes a rule that makes coding agents report their own progress on the display: a short timed message when a task starts and at each major step, and a confirm message when it ends.
