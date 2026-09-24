@@ -40,6 +40,8 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Record the 0.0.25 setup fix as verified on the AMOLED (BOARDS.md Q-009)
+
 ## 0.0.25 - Show the real IP right after Wi-Fi setup
 
 **Date:** 2026-09-24 12:45
