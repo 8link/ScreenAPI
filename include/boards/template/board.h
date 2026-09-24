@@ -19,7 +19,8 @@ constexpr int kScreenWidth = 320;
 constexpr int kScreenHeight = 240;
 constexpr uint8_t kScreenRotation = 1;  // landscape
 
-// PORT: a name unique on your network; the MCP URL is http://<hostname>.local/mcp.
-constexpr const char* kHostname = "screenapi-template";
+// The MCP URL is http://<hostname>.local/mcp. All boards use "screenapi" so
+// clients keep one URL (D-033); only one board should be online at a time.
+constexpr const char* kHostname = "screenapi";
 
 }  // namespace board

@@ -6,7 +6,7 @@
 ![Arduino](https://img.shields.io/badge/framework-Arduino%20(ESP32)-00979D)
 ![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-6f42c1)
 ![Boards](https://img.shields.io/badge/boards-ESP32%20%7C%20ESP32--S3-lightgrey)
-![Version](https://img.shields.io/badge/firmware-0.0.17-blue)
+![Version](https://img.shields.io/badge/firmware-0.0.18-blue)
 
 ```text
 +----------------------------------------------+
@@ -166,7 +166,9 @@ On first start the board shows a QR code. Scan it with the **ESP BLE Provisionin
 claude mcp add --transport http screen http://screenapi.local/mcp
 ```
 
-On Linux, `.local` names need an mDNS resolver (`avahi-daemon` and `libnss-mdns`); otherwise use the IP address from the welcome screen. The AMOLED board answers at `screenapi-amoled.local`, so both boards can run on one network.
+On Linux, `.local` names need an mDNS resolver (`avahi-daemon` and `libnss-mdns`); otherwise use the IP address from the welcome screen.
+
+Every board answers at `screenapi.local`, so one Claude Code setting works whichever board is plugged in. Keep one board online at a time; after switching boards, reconnect with `/mcp` in Claude Code, and allow up to about 2 minutes for the old address to leave the mDNS cache.
 
 ## Sending messages
 

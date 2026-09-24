@@ -16,8 +16,8 @@ constexpr int kScreenWidth = 368;
 constexpr int kScreenHeight = 448;
 constexpr uint8_t kScreenRotation = 0;
 
-// Name for mDNS (<hostname>.local) and the MCP URL shown on screen. Differs from
-// the T-Display's "screenapi" so both can run on one network.
-constexpr const char* kHostname = "screenapi-amoled";
+// Name for mDNS (<hostname>.local) and the MCP URL shown on screen. The same on
+// every board (D-033), so clients keep one URL whichever board is online.
+constexpr const char* kHostname = "screenapi";
 
 }  // namespace board

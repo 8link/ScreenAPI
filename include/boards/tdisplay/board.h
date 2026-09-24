@@ -17,7 +17,8 @@ constexpr int kScreenWidth = 240;
 constexpr int kScreenHeight = 135;
 constexpr uint8_t kScreenRotation = 1;  // landscape
 
-// Name for mDNS (<hostname>.local) and the MCP URL shown on screen.
+// Name for mDNS (<hostname>.local) and the MCP URL shown on screen. The same on
+// every board (D-033), so clients keep one URL whichever board is online.
 constexpr const char* kHostname = "screenapi";
 
 }  // namespace board

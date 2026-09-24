@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.17
+**Current firmware version:** 0.0.18
 
 ## Format
 
@@ -39,6 +39,31 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.18 - Use the mDNS name screenapi on every board
+
+**Date:** 2026-09-24 06:44
+**Author:** Claude Opus 5.5
+**Type:** Networking
+
+**Summary:**
+All boards answer at `screenapi.local` (D-033 updated), so Claude Code and the AGENTS.md status rule keep one URL whichever board is online. Only one board should be online at a time.
+
+**Changes:**
+- `include/boards/waveshare_amoled18/board.h` - `kHostname` `screenapi` (was `screenapi-amoled`).
+- `include/boards/template/board.h` - `kHostname` `screenapi` (was `screenapi-template`).
+- `include/boards/tdisplay/board.h` - Comment only; the name was already `screenapi`.
+- `platformio.ini` - `FW_VERSION` bumped to `0.0.18`.
+- `PROJECT.md` - D-033.
+- `BOARDS.md` - AMOLED mDNS name.
+- `README.md` - One address for all boards; version badge.
+
+**Verification:**
+- `pio run -e waveshare_amoled18 -j 2` succeeded (flash 1,581,845 bytes, 24.1%) and was flashed: `ScreenAPI v0.0.18`, connected to Wi-Fi (provisioned by the user with the app), `queue_status` over MCP by IP works, and a raw mDNS query for `screenapi.local` is answered by the AMOLED board. The T-Display was offline, so there was no name conflict.
+- `tdisplay` and `template` builds were stopped before finishing, to switch to faster builds in 0.0.19; both are built there.
+
+**Git commit:**
+- `v0.0.18 - Use the mDNS name screenapi on every board`
 
 ## docs - Add README for GitHub
 

@@ -299,7 +299,7 @@ Not used by ScreenAPI: audio (ES8311: MCLK 16, BCLK 9, WS 45, DOUT 8, DIN 10, am
 ### Wi-Fi
 
 - **Saved settings:** none on the unit in hand before provisioning.
-- **mDNS:** `screenapi-amoled.local` (PROJECT.md D-033); not yet observed.
+- **mDNS:** `screenapi.local`, the same name as every board since 0.0.18 (PROJECT.md D-033); not yet observed on this board.
 
 ### UART
 
