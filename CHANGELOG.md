@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.24
+**Current firmware version:** 0.0.25
 
 ## Format
 
@@ -39,6 +39,28 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.25 - Show the real IP right after Wi-Fi setup
+
+**Date:** 2026-09-24 12:45
+**Author:** Claude Opus 5.5
+**Type:** Network
+
+**Summary:**
+After a first-time Wi-Fi setup the top bar showed IP 0.0.0.0 until a reboot (reported by the user). The provisioning manager starts Wi-Fi itself, so the Arduino core treats Wi-Fi as off: `WiFi.localIP()` returns 0.0.0.0, and `WiFi.reconnect()` and the Wi-Fi reset's `WiFi.disconnect()` do nothing in that boot (BOARDS.md Q-009). Once connected, the firmware now calls `WiFi.mode(WIFI_STA)` when the core reports Wi-Fi off, which records the running station without restarting it.
+
+**Changes:**
+- `src/network.cpp` - Sync the core's Wi-Fi state in `network::poll()` after setup; serial line `Wi-Fi: station state synced after setup`.
+- `BOARDS.md` - Q-009.
+- `VERSION` - `0.0.25`.
+
+**Verification:**
+- `pio test -e native`: 81 of 81 passed.
+- `pio run -j 4`: `waveshare_amoled18` (flash 1,585,685 bytes, 24.2%), `tdisplay` (flash 1,792,121 bytes, 91.2%), `template` (flash 1,785,209 bytes, 90.8%); all three images contain `ScreenAPI v0.0.25`.
+- AMOLED: flashed; with saved Wi-Fi settings it still connects and shows its IP. The setup path itself is not yet tested on the device (the user will run setup after the next flash).
+
+**Git commit:**
+- `v0.0.25 - Show the real IP right after Wi-Fi setup`
 
 ## 0.0.24 - Restyle the message title
 

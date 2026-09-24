@@ -87,6 +87,14 @@ void begin()
 
 void poll(uint64_t nowMs)
 {
+    // After first-time setup the provisioning manager has started Wi-Fi itself,
+    // so Arduino's WiFi class still treats it as off: localIP() reads 0.0.0.0 and
+    // reconnect() and disconnect() do nothing (BOARDS.md Q-009). WiFi.mode()
+    // records the running station without restarting it.
+    if (currentState == State::Connected && WiFi.getMode() == WIFI_MODE_NULL) {
+        Serial.println(WiFi.mode(WIFI_STA) ? "Wi-Fi: station state synced after setup"
+                                           : "Wi-Fi: station state sync failed");
+    }
     if (currentState == State::Offline && nowMs - lastRetryMs >= kRetryMs) {
         lastRetryMs = nowMs;
         Serial.println("Wi-Fi: reconnecting");
