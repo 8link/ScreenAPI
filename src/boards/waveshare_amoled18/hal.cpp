@@ -14,6 +14,14 @@ namespace hal {
 
 namespace {
 
+// USB serial write timeout. Must not be 0: arduino-esp32 2.0.17 HWCDC::write()
+// counts retries with "uint32_t tries = tx_timeout_ms; tries--", which wraps at
+// 0, so with a PC connected but no program reading the port the loop waited
+// about 49 days, 1 ms at a time (BOARDS.md Q-008). With 10 ms it gives up, marks
+// the port disconnected, and later output is dropped instead of blocking.
+constexpr uint32_t kSerialTimeoutMs = 10;
+constexpr uint32_t kSerialBulkTimeoutMs = 1000;
+
 // TCA9554 registers
 constexpr uint8_t kExpanderOutput = 0x01;
 constexpr uint8_t kExpanderConfig = 0x03;  // 1 = input
@@ -103,8 +111,7 @@ void beginPowerChip()
 void begin()
 {
 #if ARDUINO_USB_CDC_ON_BOOT
-    // Do not block on serial output when no USB host is reading.
-    Serial.setTxTimeoutMs(0);
+    Serial.setTxTimeoutMs(kSerialTimeoutMs);
 #endif
     pinMode(PIN_BUTTON_DELETE, INPUT_PULLUP);
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
@@ -118,12 +125,12 @@ void begin()
              expanderOk ? "ok" : "missing", pmuReady ? "ok" : "missing");
 }
 
-// Native USB serial (HWCDC): with a zero timeout, data that does not fit the
-// 256-byte transmit buffer is dropped; a screenshot needs the host to keep up.
+// Native USB serial (HWCDC): with the short timeout, output that does not fit
+// the 256-byte transmit buffer is dropped; a screenshot waits for the host.
 void setSerialBlocking(bool blocking)
 {
 #if ARDUINO_USB_CDC_ON_BOOT
-    Serial.setTxTimeoutMs(blocking ? 1000 : 0);
+    Serial.setTxTimeoutMs(blocking ? kSerialBulkTimeoutMs : kSerialTimeoutMs);
 #endif
 }
 

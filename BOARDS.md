@@ -307,7 +307,8 @@ Not used by ScreenAPI: audio (ES8311: MCLK 16, BCLK 9, WS 45, DOUT 8, DIN 10, am
 |------|----|----|------|---------|
 | USB-Serial/JTAG | USB | USB | any | Logs, flashing, `S` and `B` commands |
 
-- **Serial output without a host:** writes use a zero timeout (`Serial.setTxTimeoutMs(0)`), so logging never blocks, and data beyond the 256-byte transmit buffer is dropped. Screenshots switch to a 1 s timeout (`hal::setSerialBlocking`); with the zero timeout, rows arrived cut off at 256 hex digits (observed 2026-09-24).
+- **Serial output without a host:** writes use a 10 ms timeout (`Serial.setTxTimeoutMs(10)`, since 0.0.20; 0 before, see Q-008), so logging does not block, and data that does not fit the 256-byte transmit buffer is dropped. Screenshots switch to a 1 s timeout (`hal::setSerialBlocking`); without it, rows arrived cut off at 256 hex digits (observed 2026-09-24).
+- **MCP response time:** after an idle period the first request took 2.8 s, the following ones about 20 ms (2026-09-24). Cause not identified (Wi-Fi power save or a blocking timezone lookup in the loop).
 
 ### Quirks and workarounds
 
@@ -315,6 +316,7 @@ Not used by ScreenAPI: audio (ES8311: MCLK 16, BCLK 9, WS 45, DOUT 8, DIN 10, am
 |----|---------|--------|------------|---------------------------|
 | Q-006 | `pio run -t upload` without `-e` builds the default env (`tdisplay`) and esptool refuses the ESP32 image on the ESP32-S3 (`This chip is ESP32-S3, not ESP32`). | Nothing flashed; no harm. | Always pass `-e waveshare_amoled18` for this board. | yes, 2026-09-24 (reported by the user) |
 | Q-007 | CST816-family touch chips stop answering on I2C while asleep. The firmware writes 1 to register 0xFE on the CST820 to keep it awake. | Polling could miss the first touch. | Register write in `hal::begin()`. | no: register and effect not verified on the CST820 |
+| Q-008 | arduino-esp32 2.0.17 `HWCDC::write()` counts retries with `uint32_t tries = tx_timeout_ms; tries--`, which wraps when the timeout is 0. `Serial.setTxTimeoutMs(0)` (as in Waveshare's examples) then makes a write wait 1 ms at a time for about 49 days once the transmit buffer is full. | Plugged into a PC with no program reading the port, the firmware stalls after boot: stuck on the welcome screen, MCP not answering. Reading the port releases it. Reported by the user; reproduced 2026-09-24 by rebooting with the port closed. | `Serial.setTxTimeoutMs(10)`: after 10 ms without progress the core marks the port disconnected and drops output. | yes, 2026-09-24 (0.0.20): rebooted with the port closed, MCP answers after 20 s and after another minute |
 
 ### References
 

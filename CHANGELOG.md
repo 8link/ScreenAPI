@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.19
+**Current firmware version:** 0.0.20
 
 ## Format
 
@@ -39,6 +39,29 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.20 - Fix AMOLED hang when USB is connected to a PC
+
+**Date:** 2026-09-24 08:03
+**Author:** Claude Opus 5.5
+**Type:** Bug fix
+
+**Summary:**
+With USB connected to a PC and no program reading the serial port, the AMOLED board stalled after boot on the welcome screen (reported by the user). Cause: a zero USB serial write timeout hits an unsigned wrap in arduino-esp32 2.0.17 `HWCDC::write()` (BOARDS.md Q-008). The timeout is now 10 ms.
+
+**Changes:**
+- `src/boards/waveshare_amoled18/hal.cpp` - Serial write timeout 10 ms (1 s for screenshots) instead of 0.
+- `VERSION` - `0.0.20`.
+- `BOARDS.md` - Q-008; serial timeout; MCP response time observation.
+
+**Verification:**
+- `pio run -e waveshare_amoled18 -j 2` succeeded (177 s, source files only) and was flashed.
+- Before the fix: rebooted with the port closed; after 20 s the screen still showed the welcome screen and MCP did not answer; reading the port released it.
+- After the fix: same test, MCP answers after 20 s; after another minute `queue_status` answers (first request 2.8 s, then about 20 ms).
+- 0.0.19 builds finished after that commit: `tdisplay` 423 s (full), flash 1,791,201 bytes (91.1%); `template` 451 s (full), flash 1,784,365 bytes (90.8%). This change touches only the AMOLED board's source.
+
+**Git commit:**
+- `v0.0.20 - Fix AMOLED hang when USB is connected to a PC`
 
 ## 0.0.19 - Move the firmware version to a VERSION file
 
