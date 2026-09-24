@@ -287,6 +287,7 @@ Not used by ScreenAPI: audio (ES8311: MCLK 16, BCLK 9, WS 45, DOUT 8, DIN 10, am
 - **Color depth:** 16 bit RGB565 over QSPI
 - **Offsets and init quirks:** Waveshare's V2 examples pass a 16 px column offset to the CO5300; ScreenAPI does the same. The SH8601 driver is a port of the vendor's init sequence onto Arduino_GFX 1.6.0 (`lib/sh8601_display`); not tested (no original-revision board).
 - **Refresh and flicker behavior:** TBD (not yet seen by eye). The frame buffer is an indexed canvas in PSRAM, flushed as a whole frame.
+- **Rounded corners:** radius at most 20 px: in the corner test (serial `C`, 0.0.21), the user saw the 20 px arc, the smallest drawn, complete in all four corners (2026-09-24). `kCornerRadius = 20` moves the top bar and the countdown 7 px in from the corners (PROJECT.md D-036). The corners cut off both before 0.0.21 (reported by the user).
 
 ### Storage
 

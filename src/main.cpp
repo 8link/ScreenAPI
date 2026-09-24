@@ -20,6 +20,7 @@ constexpr uint32_t kBootScreenMs = 1500;
 constexpr uint32_t kSaveDelayMs = 1000;  // one flash write for a burst of changes
 constexpr uint32_t kWifiResetHoldMs = 5000;  // hold both buttons this long to forget Wi-Fi
 constexpr uint32_t kWelcomeMs = 3000;
+constexpr uint32_t kCornerTestMs = 60000;
 constexpr uint32_t kIpMessageS = 60;  // on-screen time of the IP message (D-027)
 constexpr uint32_t kBatteryReadMs = 10000;
 
@@ -34,7 +35,7 @@ bool setupShown = false;
 network::SetupStatus shownSetupStatus = network::SetupStatus::Waiting;
 network::State lastState = network::State::Connecting;
 bool welcomeDone = false;
-uint64_t welcomeUntilMs = 0;
+uint64_t coverUntilMs = 0;  // the welcome or corner test screen covers the messages until then
 char announcedIp[16] = "";
 hal::Battery battery{false, 0, 0};
 bool batteryKnown = false;
@@ -163,7 +164,7 @@ bool announceConnection(uint64_t now)
     snprintf(ip, sizeof(ip), "%s", WiFi.localIP().toString().c_str());
     if (!welcomeDone) {
         welcomeDone = true;
-        welcomeUntilMs = now + kWelcomeMs;
+        coverUntilMs = now + kWelcomeMs;
         coverShown = true;
         screen::showWelcome(WiFi.SSID().c_str(), ip);
     }
@@ -174,8 +175,9 @@ bool announceConnection(uint64_t now)
     return addIpMessage(ip);
 }
 
-// Serial commands for development (F-012): 'S' sends a screenshot.
-void handleSerialCommands()
+// Serial commands for development (F-012): 'S' sends a screenshot, 'B' reads
+// the battery, 'C' shows the corner test for 60 s.
+void handleSerialCommands(uint64_t now)
 {
     while (Serial.available() > 0) {
         const int command = Serial.read();
@@ -183,6 +185,11 @@ void handleSerialCommands()
             hal::setSerialBlocking(true);
             screen::sendScreenshot(Serial);
             hal::setSerialBlocking(false);
+        } else if (command == 'C') {
+            screen::showCornerTest();
+            coverUntilMs = now + kCornerTestMs;
+            coverShown = true;
+            Serial.println("Corner test shown for 60 s");
         } else if (command == 'B') {
             if (hal::hasBattery()) {
                 const hal::Battery reading = hal::readBattery();
@@ -277,7 +284,7 @@ void loop()
 {
     const uint64_t now = nowMs();
     network::poll(now);
-    handleSerialCommands();
+    handleSerialCommands(now);
     // Buttons are read in every mode so their state stays consistent; events
     // are ignored while the setup or welcome screen is shown.
     const ui::PairEvent event =
@@ -292,7 +299,7 @@ void loop()
     setupShown = false;
 
     bool contentChanged = announceConnection(now);
-    const bool covered = now < welcomeUntilMs;
+    const bool covered = now < coverUntilMs;
     bool redraw = contentChanged;
     if (covered) {
         queue.pauseCountdown();

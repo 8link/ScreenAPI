@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.20
+**Current firmware version:** 0.0.21
 
 ## Format
 
@@ -39,6 +39,31 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.21 - Keep top bar and countdown clear of rounded corners
+
+**Date:** 2026-09-24 08:13
+**Author:** Claude Opus 5.5
+**Type:** Display
+
+**Summary:**
+The AMOLED's rounded corners cut off the top bar and the countdown box (reported by the user). Boards now declare `kCornerRadius`; the top bar and the countdown move in by the corner margin (D-036). A corner test (serial command `C`) measured the AMOLED radius at no more than 20 px, giving a 7 px margin. The T-Display and the template have square corners (0).
+
+**Changes:**
+- `src/screen.cpp`, `src/screen.h` - Corner margin for the top bar pills, the stripe, the label, and the countdown box; corner test screen with arcs of 20 to 70 px.
+- `src/main.cpp` - Serial command `C` shows the corner test for 60 s; the cover timer covers the welcome and corner test screens.
+- `include/boards/*/board.h` - `kCornerRadius`: AMOLED 20, T-Display and template 0.
+- `VERSION` - `0.0.21`.
+- `PROJECT.md` - D-036; F-007.
+- `BOARDS.md` - AMOLED rounded corners.
+
+**Verification:**
+- `pio run -j 4`: `waveshare_amoled18` 90 s, `tdisplay` 93 s (flash 1,797,701 bytes, 91.4%), `template` 92 s (flash 1,790,753 bytes, 91.1%); source files only, thanks to the VERSION file.
+- AMOLED: corner test screenshot shows arcs in all four corners; the user saw the 20 px arc complete. With `kCornerRadius = 20`, a screenshot of a timed message shows the top bar pills and the countdown `1:25` 7 px in from the corners.
+- Not yet checked by eye on the panel with the margin.
+
+**Git commit:**
+- `v0.0.21 - Keep top bar and countdown clear of rounded corners`
 
 ## 0.0.20 - Fix AMOLED hang when USB is connected to a PC
 

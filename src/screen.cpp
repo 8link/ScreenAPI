@@ -25,6 +25,11 @@ constexpr int kCountdownPadding = 5;
 constexpr int kPillGap = 3;
 constexpr int kPillPadding = 4;
 
+// Rounded display corners (D-036): content that must stay visible near a corner
+// is moved in by where the corner arc meets the diagonal, R * (1 - 1/sqrt(2)),
+// about 29 % of the radius, plus 1 px.
+constexpr int kCornerMargin = board::kCornerRadius > 0 ? (board::kCornerRadius * 293 + 999) / 1000 + 1 : 0;
+
 constexpr uint32_t kTitleSpeedPxPerS = 40;
 constexpr uint32_t kValueSpeedPxPerS = 20;
 constexpr uint32_t kScrollPauseMs = 1500;
@@ -185,7 +190,7 @@ void computeLayout()
 {
     Layout& rows = layoutRows;
     rows.pillHeight = fonts[kBarFont].lineHeight + 2;
-    rows.barHeight = rows.pillHeight + 2;
+    rows.barHeight = kCornerMargin + rows.pillHeight + 2;
     rows.titleTop = rows.barHeight + 3;
     rows.valueTop = rows.titleTop + fonts[kTitleFont].lineHeight + 4;  // divider line at valueTop - 2
     rows.valueHeight = kHeight - rows.valueTop;
@@ -298,8 +303,8 @@ void drawCountdown(uint32_t seconds)
     ui::formatCountdown(seconds, text, sizeof(text));
     const int height = layoutRows.countdownHeight;
     const int width = textWidth(text, kSmallFont) + 2 * kCountdownPadding;
-    const int x = kWidth - width - 2;
-    const int y = kHeight - height - 2;
+    const int x = kWidth - width - 2 - kCornerMargin;
+    const int y = kHeight - height - 2 - kCornerMargin;
     canvas->fillRoundRect(x, y, width, height, 3, kBlack);
     canvas->drawRoundRect(x, y, width, height, 3, kDarkGrey);
     drawTextMiddle(text, x + width / 2, y + height / 2, Align::Center, kSmallFont, kColorLightGrey);
@@ -314,7 +319,7 @@ void drawEmpty()
 // Rounded background for one top bar element.
 void drawPill(int x, int width, uint16_t color)
 {
-    canvas->fillRoundRect(x, 1, width, layoutRows.pillHeight, 4, color);
+    canvas->fillRoundRect(x, kCornerMargin + 1, width, layoutRows.pillHeight, 4, color);
 }
 
 // Battery outline, sized to the pill (18 x 9 px on the T-Display). On battery:
@@ -329,7 +334,7 @@ void drawBatteryIcon(int x, const StatusBar& bar)
 {
     const int bodyHeight = layoutRows.pillHeight / 2;
     const int bodyWidth = bodyHeight * 16 / 9;
-    const int y = 1 + (layoutRows.pillHeight - bodyHeight) / 2;
+    const int y = kCornerMargin + 1 + (layoutRows.pillHeight - bodyHeight) / 2;
     const int nub = bodyHeight / 3;
     canvas->drawRect(x, y, bodyWidth, bodyHeight, kColorLightGrey);
     canvas->fillRect(x + bodyWidth, y + nub, 2, bodyHeight - 2 * nub, kColorLightGrey);
@@ -370,12 +375,12 @@ uint16_t linkColor(Link link)
 // left, with a status stripe on its left edge (D-028).
 void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
 {
-    const int centerY = 1 + layoutRows.pillHeight / 2;
+    const int centerY = kCornerMargin + 1 + layoutRows.pillHeight / 2;
     canvas->fillRect(0, 0, kWidth, layoutRows.barHeight, kBarBackground);
 
     // Clock
     const int clockWidth = textWidth("88:88", kBarFont) + 2 * kPillPadding;
-    const int clockX = kWidth - 2 - clockWidth;
+    const int clockX = kWidth - 2 - kCornerMargin - clockWidth;
     drawPill(clockX, clockWidth, kPillBackground);
     drawTextMiddle(bar.clock, clockX + clockWidth / 2, centerY, Align::Center, kBarFont, kWhite);
 
@@ -400,10 +405,11 @@ void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
 
     // Network: status stripe, then the label in the remaining space
     constexpr int kStripeWidth = 3;
-    const int networkWidth = queueX - kPillGap - 2;
-    drawPill(2, networkWidth, kPillBackground);
-    canvas->fillRect(2 + 2, 4, kStripeWidth, layoutRows.pillHeight - 6, linkColor(bar.link));
-    drawTextMiddle(bar.network, 2 + 2 + kStripeWidth + 3, centerY, Align::Left, kBarFont, kColorLightGrey);
+    const int networkX = 2 + kCornerMargin;
+    const int networkWidth = queueX - kPillGap - networkX;
+    drawPill(networkX, networkWidth, kPillBackground);
+    canvas->fillRect(networkX + 2, kCornerMargin + 4, kStripeWidth, layoutRows.pillHeight - 6, linkColor(bar.link));
+    drawTextMiddle(bar.network, networkX + 2 + kStripeWidth + 3, centerY, Align::Left, kBarFont, kColorLightGrey);
 }
 
 void drawTitle(uint64_t elapsedMs)
@@ -642,6 +648,43 @@ void showWelcome(const char* ssid, const char* ip)
     constexpr size_t kLines = sizeof(textLines) / sizeof(textLines[0]);
     canvas->fillScreen(kBlack);
     drawBlock(textLines, kLines, kWidth / 2, (kHeight - blockHeight(textLines, kLines)) / 2, Align::Center);
+    canvas->flush();
+}
+
+void showCornerTest()
+{
+    // Arcs tangent to both edges of each corner, radius 20 to 70 px. An arc is
+    // fully visible when its radius is at least the panel's corner radius.
+    struct Arc {
+        int radius;
+        uint16_t color;
+        const char* name;
+    };
+    const Arc arcs[] = {
+        {20, kWhite, "20 white"},        {30, kColorGreen, "30 green"},    {40, kBlue, "40 blue"},
+        {50, kColorRed, "50 red"},       {60, kQueueAccent, "60 amber"}, {70, kColorLightGrey, "70 grey"},
+    };
+    canvas->fillScreen(kBlack);
+    // drawArc angles: 0 degrees points right and angles grow clockwise (checked
+    // with a screenshot), so 180 to 270 is the top-left quarter.
+    for (const Arc& arc : arcs) {
+        const int r = arc.radius;
+        const int right = kWidth - 1 - r;
+        const int bottom = kHeight - 1 - r;
+        canvas->drawArc(r, r, r, r - 1, 180, 270, arc.color);
+        canvas->drawArc(right, r, r, r - 1, 270, 360, arc.color);
+        canvas->drawArc(right, bottom, r, r - 1, 0, 90, arc.color);
+        canvas->drawArc(r, bottom, r, r - 1, 90, 180, arc.color);
+    }
+    const int lineHeight = fonts[kSmallFont].lineHeight;
+    int top = (kHeight - 8 * lineHeight) / 2;
+    drawText("Corner test", kWidth / 2, top, Align::Center, kSmallFont, kWhite);
+    top += lineHeight;
+    drawText("smallest full arc:", kWidth / 2, top, Align::Center, kSmallFont, kColorLightGrey);
+    for (const Arc& arc : arcs) {
+        top += lineHeight;
+        drawText(arc.name, kWidth / 2, top, Align::Center, kSmallFont, arc.color);
+    }
     canvas->flush();
 }
 

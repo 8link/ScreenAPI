@@ -18,6 +18,9 @@ constexpr const char* kName = "Template board";  // PORT: your board's name, pri
 constexpr int kScreenWidth = 320;
 constexpr int kScreenHeight = 240;
 constexpr uint8_t kScreenRotation = 1;  // landscape
+// Rounded display corners in px (0: square). Content near the corners moves
+// in accordingly (PROJECT.md D-036).
+constexpr int kCornerRadius = 0;
 
 // The MCP URL is http://<hostname>.local/mcp. All boards use "screenapi" so
 // clients keep one URL (D-033); only one board should be online at a time.
