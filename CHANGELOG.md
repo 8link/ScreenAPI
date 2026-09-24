@@ -40,6 +40,8 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Add README for GitHub
+
 ## 0.0.17 - Add porting template board and document the hardware contract
 
 **Date:** 2026-09-24 06:03
