@@ -16,9 +16,9 @@ static void test_parse_success()
 {
     int32_t offset = 0;
     char zone[40];
-    TEST_ASSERT_TRUE(parse(R"({"status":"success","timezone":"Europe/Warsaw","offset":7200})", offset, zone));
+    TEST_ASSERT_TRUE(parse(R"({"status":"success","timezone":"Europe/Berlin","offset":7200})", offset, zone));
     TEST_ASSERT_EQUAL_INT32(7200, offset);
-    TEST_ASSERT_EQUAL_STRING("Europe/Warsaw", zone);
+    TEST_ASSERT_EQUAL_STRING("Europe/Berlin", zone);
     TEST_ASSERT_TRUE(parse(R"({"status":"success","timezone":"America/St_Johns","offset":-9000})", offset, zone));
     TEST_ASSERT_EQUAL_INT32(-9000, offset);
 }

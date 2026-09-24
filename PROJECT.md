@@ -77,7 +77,10 @@ Left and right margins are 4 px.
 platformio.ini   PlatformIO environments; shared [env] defines FW_VERSION; one env per board
 include/boards/<board>/
                  board.h (name, screen size, rotation, mDNS hostname), pins.h (the board's pins); since 0.0.14 (D-030)
-src/             Firmware sources; src/hal.h with src/boards/<board>/hal.cpp per board since 0.0.16 (D-032)
+src/             Firmware sources; src/hal.h with src/boards/<board>/hal.cpp per board since 0.0.16 (D-032);
+                 src/boards/template/ is the porting starting point, built by the template env (0.0.17)
+tools/           screenshot.py (F-012)
+README.md        Project overview for GitHub
 lib/             Project-local libraries
 test/            Unit tests (native env for hardware-independent logic)
 ```
@@ -88,9 +91,9 @@ platformio.ini, include/, and src/ exist since 0.0.1; lib/ and test/ since 0.0.2
 
 Since 0.0.16 each board has two folders (D-030, D-032). To add one:
 
-1. `include/boards/<board>/board.h` (name, screen size after rotation, rotation, mDNS hostname) and `pins.h` (the board's pins). Copy from an existing board.
+1. Copy `include/boards/template/` and `src/boards/template/` (since 0.0.17; every value to change is marked PORT). `board.h`: name, screen size after rotation, rotation, mDNS hostname; `pins.h`: the board's pins.
 2. `src/boards/<board>/hal.cpp` implementing `src/hal.h`: `begin()` (pins, buses, power), `description()`, `setSerialBlocking()`, `display()` (Arduino_GFX bus and panel), `displaySpeedHz()`, `fonts()` (four u8g2 fonts), `deletePressed()`, `scrollPressed()` (a button or the touchscreen), `hasBattery()`, `readBattery()`.
-3. `[env:<board>]` in platformio.ini: `extends = esp32`, `board`, `board_build.partitions`, extra `lib_deps` if needed, `build_flags = ${env.build_flags} -Iinclude/boards/<board>`, and `build_src_filter = +<*> -<boards/> +<boards/<board>/>`.
+3. `[env:<board>]` in platformio.ini, copied from the `template` env: `extends = esp32`, `board`, `board_build.partitions`, extra `lib_deps` if needed, `build_flags = ${env.build_flags} -Iinclude/boards/<board>`, and `build_src_filter = +<*> -<boards/> +<boards/<board>/>`.
 4. Build with `pio run -e <board> -j 2` (U8g2's font source needs about 1 GB per compiler job).
 5. Add a BOARDS.md section from the template and a row in Supported boards.
 6. Flash, then check the boot lines (`ScreenAPI vX.Y.Z on <board name>`, `Hardware: ...`), `tools/screenshot.py --port <port>`, both inputs, and `B` for the battery.
@@ -383,6 +386,7 @@ Record decisions that a later change could accidentally undo.
 | D-031 | Graphics with Arduino_GFX 1.6.0 on every board: an indexed canvas, u8g2 fonts (U8g2 2.36.18) chosen per board, text measured and aligned by the firmware. TFT_eSPI removed. | The user chose one library for all boards. TFT_eSPI cannot drive the AMOLED board's QSPI panel. 1.6.0 is the newest Arduino_GFX that builds on arduino-esp32 2.0.17 (1.6.1 and later need core 3.x; test builds 2026-09-23). u8g2 fonts come in many sizes for different screen densities. | 2026-09-23 |
 | D-032 | A hardware layer, `src/hal.h`, with one implementation per board in `src/boards/<board>/hal.cpp`, selected with `build_src_filter`. It owns pins, buses, the display driver, fonts, inputs, and battery reading. | The AMOLED board needs code the T-Display does not (expander reset, touch, power chip, revision detection); per-board source files avoid `#if` chains in shared code. | 2026-09-24 |
 | D-033 | Waveshare AMOLED: portrait 368 x 448; BOOT deletes (hold 1.5 s clears all), a touch on the screen shows the next message, BOOT and touch held 5 s reset Wi-Fi; the revision is detected from the touch chip's I2C address (FT3168 at 0x38 original, CST820 at 0x15 V2); mDNS name `screenapi-amoled`. | User decisions (revision detection, controls, orientation). The separate mDNS name lets both boards run on one network. | 2026-09-24 |
+| D-034 | Portability first: `src/hal.h` documents the whole board contract, and a template board (`include/boards/template/`, `src/boards/template/`, generic ESP32 with an ST7789 SPI display, no battery) is built by its own `template` env so the starting point for new boards always compiles. | The user asked to focus on hardware independence so ScreenAPI ports easily to any ESP32 with Wi-Fi and a display. A template that is built cannot silently fall out of date. | 2026-09-24 |
 
 ## Verification
 

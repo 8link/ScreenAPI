@@ -7,7 +7,7 @@
 namespace clk {
 
 // Parses an ip-api.com reply such as
-// {"status":"success","timezone":"Europe/Warsaw","offset":7200}.
+// {"status":"success","timezone":"Europe/Berlin","offset":7200}.
 // offsetSeconds is the current UTC offset, daylight saving included.
 // Returns false for a failed lookup or an offset outside -14 h to +14 h.
 bool parseTimezone(const char* json, size_t length, int32_t& offsetSeconds, char* zone, size_t zoneSize);

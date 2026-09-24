@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.16
+**Current firmware version:** 0.0.17
 
 ## Format
 
@@ -39,6 +39,31 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.17 - Add porting template board and document the hardware contract
+
+**Date:** 2026-09-24 06:03
+**Author:** Claude Opus 5.5
+**Type:** Portability
+
+**Summary:**
+A template board (generic ESP32 with an ST7789 SPI display, two buttons, no battery) is the starting point for porting ScreenAPI to other ESP32 boards; its `template` env builds it so it always compiles (D-034). `src/hal.h` now documents the whole board contract and the requirements. The firmware of the T-Display and the AMOLED board is unchanged apart from comments.
+
+**Changes:**
+- `include/boards/template/board.h`, `pins.h` - New. Example values marked PORT.
+- `src/boards/template/hal.cpp` - New. Complete `hal.h` implementation with porting notes.
+- `src/hal.h` - Contract documented: when each function is called, what it must return, requirements for a board.
+- `lib/clock_logic/src/clock_logic.h`, `test/test_clock_logic/test_main.cpp` - Example timezone changed to Europe/Berlin.
+- `platformio.ini` - `template` env; `FW_VERSION` bumped to `0.0.17`.
+- `PROJECT.md` - Adding a board uses the template; repository layout; D-034.
+
+**Verification:**
+- `pio test -e native`: 81 of 81 tests passed (clock tests with the new example timezone).
+- `pio run -j 2`: `template` RAM 86,912 bytes (26.5%), flash 1,784,365 bytes (90.8%); `tdisplay` flash 1,791,201 bytes (91.1%); `waveshare_amoled18` flash 1,581,861 bytes (24.1%).
+- Not flashed: the template is not a real board; the T-Display and AMOLED code changed only in comments.
+
+**Git commit:**
+- `v0.0.17 - Add porting template board and document the hardware contract`
 
 ## docs - Redact network and device identifiers
 
