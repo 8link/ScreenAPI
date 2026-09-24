@@ -1,5 +1,10 @@
 # ScreenAPI
 
+<p align="center">
+  <img src="images/screenapi-amoled.jpg" alt="ScreenAPI on a square AMOLED board: a Build finished message with a 7:05 countdown" width="49%">
+  <img src="images/screenapi-lcd.jpg" alt="ScreenAPI on a small landscape LCD board: a Docs untracked message in green" width="49%">
+</p>
+
 **A small Wi-Fi desk display for your AI agents.** An ESP32 board with a screen runs an [MCP](https://modelcontextprotocol.io) server on your local network. Claude Code, Codex, OpenCode, or any other MCP client sends it status messages, and the device takes care of showing them: queuing, scrolling, colors, timers, and button or touch controls.
 
 ![PlatformIO](https://img.shields.io/badge/build-PlatformIO-orange)
