@@ -1,15 +1,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <battery_level.h>
 #include <button_pair.h>
 #include <esp_timer.h>
 #include <message_queue.h>
 
-#include "battery.h"
 #include "clock.h"
 #include "mcp_server.h"
 #include "network.h"
 #include "board.h"
+#include "hal.h"
 #include "screen.h"
 #include "storage.h"
 
@@ -37,7 +36,7 @@ network::State lastState = network::State::Connecting;
 bool welcomeDone = false;
 uint64_t welcomeUntilMs = 0;
 char announcedIp[16] = "";
-ui::BatteryLevel batteryLevel{false, 0};
+hal::Battery battery{false, 0, 0};
 bool batteryKnown = false;
 uint64_t lastBatteryReadMs = 0;
 
@@ -134,8 +133,8 @@ void runSetupScreen()
 bool addIpMessage(const char* ip)
 {
     char value[160];
-    snprintf(value, sizeof(value), "{green}Connected{/} to %s\nIP %s\nMCP http://screenapi.local/mcp",
-             WiFi.SSID().c_str(), ip);
+    snprintf(value, sizeof(value), "{green}Connected{/} to %s\nIP %s\nMCP http://%s.local/mcp",
+             WiFi.SSID().c_str(), ip, board::kHostname);
     const mq::NewMessage message{"ip", "Network", value, mq::FontSize::Small, mq::Color::White, mq::Kind::Timed,
                                  kIpMessageS};
     const mq::AddResult result = queue.add(message);
@@ -181,10 +180,14 @@ void handleSerialCommands()
     while (Serial.available() > 0) {
         const int command = Serial.read();
         if (command == 'S') {
+            hal::setSerialBlocking(true);
             screen::sendScreenshot(Serial);
+            hal::setSerialBlocking(false);
         } else if (command == 'B') {
-            if (battery::available()) {
-                Serial.printf("Battery: %u mV\n", static_cast<unsigned>(battery::readMillivolts()));
+            if (hal::hasBattery()) {
+                const hal::Battery reading = hal::readBattery();
+                Serial.printf("Battery: %u mV, %d %%, %s\n", static_cast<unsigned>(reading.millivolts), reading.percent,
+                              reading.external ? "USB power" : "on battery");
             } else {
                 Serial.println("Battery: no battery sense on this board");
             }
@@ -194,11 +197,11 @@ void handleSerialCommands()
 
 void readBatteryIfDue(uint64_t now)
 {
-    if (!battery::available() || (batteryKnown && now - lastBatteryReadMs < kBatteryReadMs)) {
+    if (!hal::hasBattery() || (batteryKnown && now - lastBatteryReadMs < kBatteryReadMs)) {
         return;
     }
     lastBatteryReadMs = now;
-    batteryLevel = ui::batteryLevel(battery::readMillivolts());
+    battery = hal::readBattery();
     batteryKnown = true;
 }
 
@@ -219,10 +222,10 @@ screen::StatusBar statusBar()
         break;
     }
     clock_sync::text(bar.clock, sizeof(bar.clock));
-    bar.hasBattery = battery::available();
+    bar.hasBattery = hal::hasBattery();
     bar.batteryKnown = batteryKnown;
-    bar.externalPower = batteryLevel.external;
-    bar.batteryPercent = batteryLevel.percent;
+    bar.externalPower = battery.external;
+    bar.batteryPercent = battery.percent;
     return bar;
 }
 
@@ -250,11 +253,9 @@ void setup()
 {
     Serial.begin(115200);
     Serial.printf("ScreenAPI v%s on %s\n", FW_VERSION, board::kName);
+    hal::begin();
+    Serial.printf("Hardware: %s\n", hal::description());
 
-    // GPIO35 is input-only and has no internal pull-up; the board provides an external one.
-    pinMode(PIN_BUTTON_DELETE, INPUT);
-    pinMode(PIN_BUTTON_SCROLL, INPUT_PULLUP);
-    battery::begin();
 
     if (!screen::begin()) {
         Serial.println("Screen buffer allocation failed");
@@ -280,7 +281,7 @@ void loop()
     // Buttons are read in every mode so their state stays consistent; events
     // are ignored while the setup or welcome screen is shown.
     const ui::PairEvent event =
-        buttons.update(digitalRead(PIN_BUTTON_DELETE) == LOW, digitalRead(PIN_BUTTON_SCROLL) == LOW, now);
+        buttons.update(hal::deletePressed(), hal::scrollPressed(), now);
 
     if (network::state() == network::State::Setup) {
         runSetupScreen();

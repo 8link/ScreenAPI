@@ -7,6 +7,7 @@ Hardware reference. Record board specifications, quirks, and usage findings when
 | Board | Revision | MCU | PlatformIO env | Status |
 |-------|----------|-----|----------------|--------|
 | LilyGO TTGO T-Display | TBD (see Identification) | ESP32 | `tdisplay` (board id `lilygo-t-display`) | Brought up with 0.0.1 (verified on device 2026-09-22) |
+| Waveshare ESP32-S3-Touch-AMOLED-1.8 | V2 (CO5300 / CST820), detected | ESP32-S3 | `waveshare_amoled18` (board id `esp32-s3-devkitc-1`) | Boots with 0.0.16; display, touch, Wi-Fi not yet checked by eye |
 
 Copy the template at the end of this file once per new board.
 
@@ -220,6 +221,124 @@ Free heap: 295564 bytes, largest block: 110580 bytes          (2.3 s)
 - **Opening the port without a reset** (Linux, pyserial, CP2104, observed 2026-09-23): opening raises DTR and RTS together, which the auto-reset transistors ignore. Setting `dtr = False` first leaves RTS alone asserted for a moment, which pulls EN low and resets the board. Release RTS first, then DTR (`tools/screenshot.py`).
 - **Smoke test:** backlight on; "ScreenAPI" and the version centered in landscape, not shifted, clipped, or mirrored (F-010)
 - **Known-good firmware version:** 0.0.3 (2026-09-23)
+
+---
+
+## Waveshare ESP32-S3-Touch-AMOLED-1.8
+
+Sources: vendor repository https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.8 (read at commit 78e13f8, 2026-09-15): README, `examples/arduino*/libraries/Mylibrary/pin_config.h`, Arduino examples 01_HelloWorld, 02_Drawing_board, 12_LVGL_AXP2101_ADC_Data, docs. The repository has no schematic. Observed values are marked with a date.
+
+### Identification
+
+- **Name:** Waveshare ESP32-S3-Touch-AMOLED-1.8
+- **Revision:** two revisions with the same pins: original (SH8601 display, FT3168 touch) and V2 (CO5300 display, CST820 touch). The firmware detects the revision from the touch chip's I2C address. Unit in hand: V2 (detected with 0.0.16, 2026-09-24).
+- **Vendor:** Waveshare
+- **PlatformIO board id:** `esp32-s3-devkitc-1` with 16 MB flash and OPI PSRAM settings in the `waveshare_amoled18` env
+- **Framework:** Arduino (arduino-esp32 2.0.17). The vendor examples target arduino-esp32 3.3.11 and bundle Arduino_GFX 1.6.4, which does not build on 2.0.17 (PROJECT.md D-031).
+
+### MCU
+
+- **Chip:** ESP32-S3 (QFN56), revision v0.2, embedded 8 MB PSRAM (AP_3v3); reported by esptool, 2026-09-24. MAC 1c:db:d4:7b:87:c8.
+- **Cores:** 2 (Xtensa LX7)
+- **Clock:** 240 MHz
+- **Flash (size / mode / speed):** 16 MB, quad (eFuse), 3.3 V; esptool 2026-09-24
+- **PSRAM:** 8 MB; used for the 164,864-byte frame buffer
+- **USB type:** native USB-Serial/JTAG (USB 303a:1001), `/dev/ttyACM0`. Resets on flashing re-enumerate the port.
+- **Partition scheme:** `default_16MB.csv`, the same layout found on the board before the first flash (nvs 20K, otadata 8K, app0 and app1 6400K each, spiffs 3456K, coredump 64K; read back 2026-09-24)
+- **Strapping pins:** GPIO0 (BOOT button), GPIO3, GPIO45, GPIO46
+
+### Pin mapping
+
+Mirrors `include/boards/waveshare_amoled18/pins.h`, which is the source of truth. Values from Waveshare's `pin_config.h`, identical for both revisions.
+
+| Signal | GPIO | Direction | Peripheral | Notes |
+|--------|------|-----------|------------|-------|
+| LCD_SDIO0 to LCD_SDIO3 | 4, 5, 6, 7 | Out | QSPI (display) | |
+| LCD_SCLK | 11 | Out | QSPI (display) | |
+| LCD_CS | 12 | Out | QSPI (display) | |
+| PIN_I2C_SDA | 15 | I/O | I2C | Expander, touch, power chip, RTC, IMU |
+| PIN_I2C_SCL | 14 | Out | I2C | 400 kHz |
+| PIN_TOUCH_INT | 21 | In | Touch | Not used: touch is polled |
+| PIN_BUTTON_DELETE | 0 | In | BOOT button | Active LOW, internal pull-up; strapping pin |
+
+Not used by ScreenAPI: audio (ES8311: MCLK 16, BCLK 9, WS 45, DOUT 8, DIN 10, amplifier enable 46), microSD (SDMMC CLK 2, CMD 1, DATA 3).
+
+### Connected peripherals
+
+| Peripheral | Bus | Address or CS | Driver | Notes |
+|------------|-----|---------------|--------|-------|
+| AMOLED 1.8 inch, 368 x 448 | QSPI | CS GPIO12 | Arduino_GFX 1.6.0 `Arduino_CO5300` (V2) or `lib/sh8601_display` (original) | Reset through the expander |
+| TCA9554 I/O expander | I2C | 0x20 | direct register writes | Pins 0 to 2: display and touch reset |
+| CST820 touch (V2) | I2C | 0x15 | direct register reads | FT3168 at 0x38 on the original revision |
+| AXP2101 power management | I2C | 0x34 | XPowersLib 0.3.3 | Battery, USB, charger |
+| PCF85063 RTC, QMI8658 IMU, ES8311 codec | I2C / I2S | TBD | not used | |
+
+### Power
+
+- **Input:** USB-C 5 V; the AXP2101 manages the system rails and the battery.
+- **Battery:** connector for a single Li-ion cell (TBD: capacity). The AXP2101 reports voltage, percentage, USB presence, and charging.
+- **Observed with 0.0.16, 2026-09-24, on USB:** `B` reads 4,179 to 4,180 mV, 100 %, USB power. Whether a cell is attached: TBD (the AXP2101 reports one as connected).
+- **Power key:** handled by the AXP2101; not used by ScreenAPI.
+
+### Display
+
+- **Controller:** CO5300 (V2) or SH8601 (original), QSPI AMOLED
+- **Resolution:** 368 x 448, portrait (rotation 0) in ScreenAPI
+- **Color depth:** 16 bit RGB565 over QSPI
+- **Offsets and init quirks:** Waveshare's V2 examples pass a 16 px column offset to the CO5300; ScreenAPI does the same. The SH8601 driver is a port of the vendor's init sequence onto Arduino_GFX 1.6.0 (`lib/sh8601_display`); not tested (no original-revision board).
+- **Refresh and flicker behavior:** TBD (not yet seen by eye). The frame buffer is an indexed canvas in PSRAM, flushed as a whole frame.
+
+### Storage
+
+- **Filesystem:** LittleFS on `spiffs` (3,538,944 bytes). The first 0.0.16 boot mounted it without formatting (8,192 bytes used), so a file system was already there.
+
+### BLE
+
+- **Role:** peripheral during Wi-Fi provisioning; advertised name `PROV_7B87C8` on the unit in hand. The setup screen appeared on the first boot (no saved network), 2026-09-24; pairing with the app not yet tested.
+
+### Wi-Fi
+
+- **Saved settings:** none on the unit in hand before provisioning.
+- **mDNS:** `screenapi-amoled.local` (PROJECT.md D-033); not yet observed.
+
+### UART
+
+| Port | TX | RX | Baud | Purpose |
+|------|----|----|------|---------|
+| USB-Serial/JTAG | USB | USB | any | Logs, flashing, `S` and `B` commands |
+
+- **Serial output without a host:** writes use a zero timeout (`Serial.setTxTimeoutMs(0)`), so logging never blocks, and data beyond the 256-byte transmit buffer is dropped. Screenshots switch to a 1 s timeout (`hal::setSerialBlocking`); with the zero timeout, rows arrived cut off at 256 hex digits (observed 2026-09-24).
+
+### Quirks and workarounds
+
+| ID | Finding | Impact | Workaround | Verified (yes / no, date) |
+|----|---------|--------|------------|---------------------------|
+| Q-006 | `pio run -t upload` without `-e` builds the default env (`tdisplay`) and esptool refuses the ESP32 image on the ESP32-S3 (`This chip is ESP32-S3, not ESP32`). | Nothing flashed; no harm. | Always pass `-e waveshare_amoled18` for this board. | yes, 2026-09-24 (reported by the user) |
+| Q-007 | CST816-family touch chips stop answering on I2C while asleep. The firmware writes 1 to register 0xFE on the CST820 to keep it awake. | Polling could miss the first touch. | Register write in `hal::begin()`. | no: register and effect not verified on the CST820 |
+
+### References
+
+- **Official docs:** https://docs.waveshare.com/ESP32-S3-Touch-AMOLED-1.8
+- **Repository:** https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.8
+- **Schematic:** not published in the repository
+- **Vendor examples:** Arduino and ESP-IDF examples in the repository
+
+### On-device verification
+
+- **Flash command:** `pio run -e waveshare_amoled18 -j 2 -t upload --upload-port /dev/ttyACM0`
+- **Expected boot serial output (0.0.16, 2026-09-24):**
+
+```
+ScreenAPI v0.0.16 on Waveshare ESP32-S3-Touch-AMOLED-1.8
+Hardware: CO5300 + CST820 (V2), expander ok, AXP2101 ok
+Wi-Fi setup: waiting for the app, device PROV_7B87C8
+Storage: LittleFS 8192 of 3538944 bytes used
+Restored 0 messages
+Free heap: 156532 bytes, largest block: 147444 bytes
+```
+
+- **Smoke test:** TBD
+- **Known-good firmware version:** none yet
 
 ---
 

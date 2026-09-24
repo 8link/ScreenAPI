@@ -1,6 +1,6 @@
 // Board description for the LilyGO TTGO T-Display (BOARDS.md). Each board has
-// its own folder under include/boards/ with board.h, pins.h, and display.h;
-// the PlatformIO env puts that folder on the include path (PROJECT.md D-030).
+// its own folder under include/boards/ with board.h and pins.h, and its hardware
+// layer in src/boards/<board>/hal.cpp (PROJECT.md D-030, D-032).
 #pragma once
 
 #include <stdint.h>
@@ -17,7 +17,7 @@ constexpr int kScreenWidth = 240;
 constexpr int kScreenHeight = 135;
 constexpr uint8_t kScreenRotation = 1;  // landscape
 
-// Battery voltage sense (PIN_BATTERY_ADC, PIN_ADC_EN in pins.h).
-constexpr bool kHasBatterySense = true;
+// Name for mDNS (<hostname>.local) and the MCP URL shown on screen.
+constexpr const char* kHostname = "screenapi";
 
 }  // namespace board

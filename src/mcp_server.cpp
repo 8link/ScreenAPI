@@ -5,11 +5,13 @@
 #include <WiFi.h>
 #include <mcp_handler.h>
 
+#include "board.h"
+
 namespace mcp_server {
 
 namespace {
 
-constexpr const char* kHostname = "screenapi";
+constexpr const char* kHostname = board::kHostname;
 
 WebServer server(80);
 mcp::Handler* handler = nullptr;

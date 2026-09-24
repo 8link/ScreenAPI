@@ -1,4 +1,5 @@
-// HTTP endpoint for MCP on port 80 and the screenapi.local mDNS name (PROJECT.md F-003, D-025).
+// HTTP endpoint for MCP on port 80 and the board's mDNS name, for example
+// screenapi.local (PROJECT.md F-003, D-025).
 #pragma once
 
 #include <message_queue.h>

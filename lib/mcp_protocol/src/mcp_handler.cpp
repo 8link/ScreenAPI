@@ -17,7 +17,7 @@ const char* const kColorNames[] = {"white", "blue", "green", "red"};
 const char* const kFontNames[] = {"small", "large"};
 
 const char* const kInstructions =
-    "Shows short messages on the user's desk display (240 x 135 pixels, ASCII fonts). Use show_message for "
+    "Shows short messages on the user's desk display (ASCII fonts). Use show_message for "
     "status updates and give repeated updates the same id, so each update replaces the previous one instead of "
     "filling the queue (30 messages). Timed messages disappear after duration_s seconds on screen; confirm "
     "messages stay until the user deletes them with a button.";
@@ -104,7 +104,7 @@ void describeTools(JsonArray tools)
                       static_cast<int>(mq::kValueMaxLen));
     addEnumProperty(properties, "color", "Text color. Default white.", kColorNames, 4);
     addEnumProperty(properties, "font_size",
-                    "small: about 6 lines of 30 characters visible; large: about 3 lines of 17. Default small.",
+                    "small: more text per screen; large: fewer, bigger lines. Default small.",
                     kFontNames, 2);
     const char* const kinds[] = {"timed", "confirm"};
     addEnumProperty(properties, "kind",

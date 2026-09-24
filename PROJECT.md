@@ -46,7 +46,7 @@ Planned module boundaries follow the feature log. Names and paths are TBD until 
 | Main loop | Buttons, expiry, MCP events, connection announcement, screen update | `src/main.cpp` |
 | Storage | Mount LittleFS, load the queue at boot, save it after changes (F-004) | `src/storage.cpp`, `lib/message_queue/src/queue_codec.*` |
 | Time | NTP sync, timezone lookup by IP (F-008) | `src/clock.cpp`, `lib/clock_logic/` |
-| Battery | Voltage reading and level for the top bar (F-007) | `src/battery.cpp`, `lib/ui_logic/src/battery_level.*` |
+| Board hardware | Per-board pins, display, fonts, inputs, battery (D-032) | `src/hal.h`, `src/boards/<board>/hal.cpp`, `lib/ui_logic/src/battery_level.*`, `lib/sh8601_display/` |
 
 `lib/message_queue/` and `lib/ui_logic/` stay hardware-independent so they run in the native test environment (AGENTS.md, Engineering rules).
 
@@ -76,9 +76,8 @@ Left and right margins are 4 px.
 ```
 platformio.ini   PlatformIO environments; shared [env] defines FW_VERSION; one env per board
 include/boards/<board>/
-                 board.h (screen size, rotation, capabilities), pins.h (the board's pins),
-                 display.h (panel driver and fonts; tft_setup.h before 0.0.15); since 0.0.14 (D-030)
-src/             Firmware sources
+                 board.h (name, screen size, rotation, mDNS hostname), pins.h (the board's pins); since 0.0.14 (D-030)
+src/             Firmware sources; src/hal.h with src/boards/<board>/hal.cpp per board since 0.0.16 (D-032)
 lib/             Project-local libraries
 test/            Unit tests (native env for hardware-independent logic)
 ```
@@ -87,15 +86,16 @@ platformio.ini, include/, and src/ exist since 0.0.1; lib/ and test/ since 0.0.2
 
 ### Adding a board
 
-Since 0.0.14 the firmware is organized per board (D-030). To add one:
+Since 0.0.16 each board has two folders (D-030, D-032). To add one:
 
-1. Copy `include/boards/tdisplay/` to `include/boards/<board>/` and adapt `board.h` (name, screen size after rotation, rotation, `kHasBatterySense`), `pins.h`, and `display.h` (Arduino_GFX bus and panel driver, power-on, four u8g2 fonts).
-2. Add `[env:<board>]` to platformio.ini: `platform`, `board`, `framework = arduino`, `board_build.partitions`, `lib_deps`, and `build_flags = ${env.build_flags} -Iinclude/boards/<board>`.
-3. Build with `pio run -e <board> -j 2` (U8g2's font source needs about 1 GB per compiler job).
-4. Add a BOARDS.md section from the template and a row in Supported boards.
-5. Flash, then check the boot line (`ScreenAPI vX.Y.Z on <board name>`), `tools/screenshot.py`, the buttons, and `B` for the battery.
+1. `include/boards/<board>/board.h` (name, screen size after rotation, rotation, mDNS hostname) and `pins.h` (the board's pins). Copy from an existing board.
+2. `src/boards/<board>/hal.cpp` implementing `src/hal.h`: `begin()` (pins, buses, power), `description()`, `setSerialBlocking()`, `display()` (Arduino_GFX bus and panel), `displaySpeedHz()`, `fonts()` (four u8g2 fonts), `deletePressed()`, `scrollPressed()` (a button or the touchscreen), `hasBattery()`, `readBattery()`.
+3. `[env:<board>]` in platformio.ini: `extends = esp32`, `board`, `board_build.partitions`, extra `lib_deps` if needed, `build_flags = ${env.build_flags} -Iinclude/boards/<board>`, and `build_src_filter = +<*> -<boards/> +<boards/<board>/>`.
+4. Build with `pio run -e <board> -j 2` (U8g2's font source needs about 1 GB per compiler job).
+5. Add a BOARDS.md section from the template and a row in Supported boards.
+6. Flash, then check the boot lines (`ScreenAPI vX.Y.Z on <board name>`, `Hardware: ...`), `tools/screenshot.py --port <port>`, both inputs, and `B` for the battery.
 
-Limits of the current code: the screen must be at least 240 x 135 after rotation (compile-time check); the board needs the two buttons (`PIN_BUTTON_DELETE`, `PIN_BUTTON_SCROLL`); the 8-bit frame buffer takes width x height bytes of internal RAM (about 94 KB largest free block without PSRAM); BLE provisioning needs BLE (not the ESP32-S2); the firmware needs an app slot of about 1.8 MB; the `btInUse()` override (Q-005) is for the classic ESP32 and harmless elsewhere. The layout keeps fixed row heights and adds extra height to the value area; setup and welcome screens are centered vertically; the setup QR code scales up to 4 px per module.
+Limits of the current code: the screen must be at least 240 x 135 after rotation (compile-time check); two inputs (delete and scroll; the scroll input can be the touchscreen); the 8-bit frame buffer takes width x height bytes (internal RAM without PSRAM, about 94 KB largest free block on the T-Display); BLE provisioning needs BLE (not the ESP32-S2); the firmware needs an app slot of about 1.8 MB; the `btInUse()` override (Q-005) is for the classic ESP32 and harmless elsewhere. Row heights come from the board's fonts; setup and welcome screens are centered; on portrait screens the setup QR code sits above the text.
 
 ## Supported boards
 
@@ -104,6 +104,7 @@ Details for each board live in BOARDS.md.
 | Board | MCU | PlatformIO env | Status | Details |
 |-------|-----|----------------|--------|---------|
 | LilyGO TTGO T-Display | ESP32 (dual-core Xtensa LX6) | `tdisplay` (board id `lilygo-t-display`) | Brought up with 0.0.1 (verified on device 2026-09-22) | BOARDS.md "LilyGO TTGO T-Display" |
+| Waveshare ESP32-S3-Touch-AMOLED-1.8 | ESP32-S3 (dual-core Xtensa LX7), 8 MB PSRAM | `waveshare_amoled18` (board id `esp32-s3-devkitc-1`) | Boots with 0.0.16 (V2 revision); display, touch, and Wi-Fi not yet checked by eye | BOARDS.md "Waveshare ESP32-S3-Touch-AMOLED-1.8" |
 
 ## Feature log
 
@@ -205,7 +206,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Area:** Input
 - **Status:** Done
 - **Added in version:** 0.0.3
-- **Description:** Button mapping (D-007):
+- **Description:** Button mapping (D-007; on the Waveshare AMOLED: BOOT is delete, the touchscreen is scroll, D-033):
   - GPIO35 (delete): short press deletes the currently shown message; hold clears all messages.
   - GPIO0 (scroll): short press shows the next queued message, wrapping from last to first.
 - **Source files:** `src/main.cpp`, `lib/ui_logic/src/button_tracker.*`
@@ -289,7 +290,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
 - **Added in version:** 0.0.11
 - **Description:** Captures the current screen as a PNG without a camera, to check layouts and colors while developing.
 - **Source files:** `src/main.cpp` (`handleSerialCommands`), `src/screen.cpp` (`sendScreenshot`), `tools/screenshot.py`
-- **Behavior:** Sending `S` on the serial port makes the firmware write `SCREENSHOT 240 135 rgb332`, 135 lines of hex (one per pixel row of the 8-bit frame buffer), and `END`; the loop blocks for about 6 s. `tools/screenshot.py [out.png] [--port /dev/ttyUSB0] [--scale 3]` sends the command and saves a PNG. It opens the port without resetting the board (BOARDS.md UART). Only frames drawn through the frame buffer are captured; the boot screen is not.
+- **Behavior:** Sending `S` on the serial port makes the firmware write `SCREENSHOT <width> <height> indexed565`, a palette line, one line of hex per pixel row of the 8-bit frame buffer, and `END` (`rgb332` without a palette line in 0.0.11 to 0.0.14); on the native USB serial of the ESP32-S3 the firmware waits for the host while sending (`hal::setSerialBlocking`); the loop blocks for about 6 s. `tools/screenshot.py [out.png] [--port /dev/ttyUSB0] [--scale 3]` sends the command and saves a PNG. It opens the port without resetting the board (BOARDS.md UART). Only frames drawn through the frame buffer are captured; the boot screen is not.
 - **Verification:** On device, 2026-09-23: screenshots of the message screen matched the expected layout; opening the port with the script's line order did not reset the board.
 
 <!-- Template for new entries:
@@ -378,8 +379,10 @@ Record decisions that a later change could accidentally undo.
 | D-027 | The welcome screen shows for 3 s at the first connection after each boot. The IP message has id `ip`, is timed (60 s on screen), and is re-added only at the first connection after boot or when the IP changes. | The user asked for the IP on a welcome screen and as a queued message and left the details open. The id keeps one IP message at most; timed, because the IP is always in the top bar. | 2026-09-23 |
 | D-028 | Top bar: dark slate bar with separate pills (network with status stripe, amber bold queue position, battery icon, clock). Battery as an icon only, a lightning bolt at or above 4,400 mV. Colors are exact RGB332 values. | The user asked for a dark bar, separation between elements, and a bolder queue position further right. Text for the battery and a Wi-Fi icon did not fit next to a full IP address and `30/30`. The 8-bit frame buffer would shift other colors (a 16-bit dark grey becomes olive). | 2026-09-23 |
 | D-029 | Clock: NTP for the time; the current UTC offset from `ip-api.com` over plain HTTP/1.0, refreshed hourly (every minute after a failure); 24-hour format; `--:--` until both are known. | The user asked for NTP time and a timezone based on the IP (D-012). ip-api.com needs no key, and its offset already includes daylight saving, so no timezone database is needed. A hand-written GET instead of HTTPClient saves about 150 KB of flash. | 2026-09-23 |
-| D-030 | Board-specific code lives in `include/boards/<board>/` (`board.h`, `pins.h`, `display.h`; `tft_setup.h` before 0.0.15), selected per PlatformIO env with `-Iinclude/boards/<board>`. `board.h` gives the screen size, rotation, and capabilities; the layout derives from the size; battery support is optional per board. | The user asked for a structure that makes adding boards easy. Keeping each board's headers together avoids `#if` chains. | 2026-09-23 |
+| D-030 | Board-specific headers live in `include/boards/<board>/` (`board.h`, `pins.h`; `tft_setup.h` before 0.0.15, `display.h` in 0.0.15), board code in `src/boards/<board>/` since 0.0.16 (D-032), selected per PlatformIO env with `-Iinclude/boards/<board>`. `board.h` gives the screen size, rotation, and capabilities; the layout derives from the size; battery support is optional per board. | The user asked for a structure that makes adding boards easy. Keeping each board's headers together avoids `#if` chains. | 2026-09-23 |
 | D-031 | Graphics with Arduino_GFX 1.6.0 on every board: an indexed canvas, u8g2 fonts (U8g2 2.36.18) chosen per board, text measured and aligned by the firmware. TFT_eSPI removed. | The user chose one library for all boards. TFT_eSPI cannot drive the AMOLED board's QSPI panel. 1.6.0 is the newest Arduino_GFX that builds on arduino-esp32 2.0.17 (1.6.1 and later need core 3.x; test builds 2026-09-23). u8g2 fonts come in many sizes for different screen densities. | 2026-09-23 |
+| D-032 | A hardware layer, `src/hal.h`, with one implementation per board in `src/boards/<board>/hal.cpp`, selected with `build_src_filter`. It owns pins, buses, the display driver, fonts, inputs, and battery reading. | The AMOLED board needs code the T-Display does not (expander reset, touch, power chip, revision detection); per-board source files avoid `#if` chains in shared code. | 2026-09-24 |
+| D-033 | Waveshare AMOLED: portrait 368 x 448; BOOT deletes (hold 1.5 s clears all), a touch on the screen shows the next message, BOOT and touch held 5 s reset Wi-Fi; the revision is detected from the touch chip's I2C address (FT3168 at 0x38 original, CST820 at 0x15 V2); mDNS name `screenapi-amoled`. | User decisions (revision detection, controls, orientation). The separate mDNS name lets both boards run on one network. | 2026-09-24 |
 
 ## Verification
 

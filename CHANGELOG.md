@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.15
+**Current firmware version:** 0.0.16
 
 ## Format
 
@@ -39,6 +39,39 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.16 - Add Waveshare ESP32-S3-Touch-AMOLED-1.8 board
+
+**Date:** 2026-09-24 05:10
+**Author:** Claude Opus 5.5
+**Type:** Board support, refactor
+
+**Summary:**
+Second board: Waveshare ESP32-S3-Touch-AMOLED-1.8, env `waveshare_amoled18` (D-033). A hardware layer, `src/hal.h` with `src/boards/<board>/hal.cpp`, now holds all board-specific code (D-032). The AMOLED firmware detects the revision from the touch chip (V2 found on the unit in hand), resets display and touch through the TCA9554 expander, reads battery and USB from the AXP2101, and uses BOOT as delete and the touchscreen as scroll. An SH8601 driver for the original revision is ported to Arduino_GFX 1.6.0 (untested). The T-Display moved onto the same layer; not yet checked on the device.
+
+**Changes:**
+- `src/hal.h` - New. Board hardware interface.
+- `src/boards/tdisplay/hal.cpp` - New. T-Display pins, ST7789, fonts, buttons, battery ADC (from the removed `src/battery.*` and `include/boards/tdisplay/display.h`).
+- `src/boards/waveshare_amoled18/hal.cpp` - New. Expander reset, revision detection, QSPI panel, fonts `helvR14` / `helvR18` / `helvR24`, BOOT and touch inputs, AXP2101 battery, blocking serial for screenshots.
+- `include/boards/waveshare_amoled18/board.h`, `pins.h` - New.
+- `include/boards/tdisplay/board.h`, `pins.h` - mDNS hostname; comments.
+- `lib/sh8601_display/` - New. SH8601 driver: Arduino_GFX 1.6.0 CO5300 driver with the SH8601 init sequence and rotation from Waveshare's bundled Arduino_GFX (BSD license included).
+- `src/main.cpp` - Hardware through `hal`; hostname in the IP message; `Hardware:` boot line; battery command shows percent and power source.
+- `src/screen.cpp` - Display and fonts from `hal`; hostname on the welcome screen.
+- `src/mcp_server.cpp`, `.h` - mDNS hostname from board.h.
+- `lib/mcp_protocol/src/mcp_handler.cpp` - Instructions and font description no longer mention the T-Display's screen size.
+- `platformio.ini` - Shared `[esp32]` section; `build_src_filter` per board; `waveshare_amoled18` env; `FW_VERSION` bumped to `0.0.16`.
+- `PROJECT.md` - Adding a board, modules, Supported boards, F-006, F-012; D-030 updated, D-032, D-033.
+- `BOARDS.md` - Waveshare AMOLED section; Q-006, Q-007.
+
+**Verification:**
+- `pio test -e native`: 81 of 81 tests passed.
+- `pio run -e tdisplay -j 2`: RAM 86,928 bytes (26.5%), flash 1,791,173 bytes (91.1%). `pio run -e waveshare_amoled18 -j 2`: RAM 95,496 bytes (29.1%), flash 1,582,144 bytes of 6,553,600 (24.1%).
+- AMOLED, flashed 2026-09-24: `Hardware: CO5300 + CST820 (V2), expander ok, AXP2101 ok`; Wi-Fi setup started (`PROV_7B87C8`); screenshot shows the portrait setup screen with the QR code; `B` reads 4,180 mV, 100 %, USB power. First screenshot attempt came back cut off at 256 hex digits per row; fixed with blocking serial during screenshots.
+- Not yet: the AMOLED panel by eye, touch, BOOT, Wi-Fi pairing, MCP; anything on the T-Display (disconnected; 0.0.15 and 0.0.16 both unverified there); the SH8601 path (no original-revision board).
+
+**Git commit:**
+- `v0.0.16 - Add Waveshare ESP32-S3-Touch-AMOLED-1.8 board`
 
 ## 0.0.15 - Switch graphics to Arduino_GFX with u8g2 fonts
 

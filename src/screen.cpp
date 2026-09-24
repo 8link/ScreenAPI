@@ -8,7 +8,7 @@
 #include <text_wrap.h>
 
 #include "board.h"
-#include "display.h"
+#include "hal.h"
 
 namespace screen {
 
@@ -514,16 +514,16 @@ void drawBlock(const TextLine* textLines, size_t count, int x, int top, Align al
 
 bool begin()
 {
-    board::powerOnDisplay();
-    display = board::createDisplay();
+    display = hal::display();
     // 8-bit indexed canvas: one byte per pixel plus a palette of exact RGB565
-    // colors (32,400 bytes at 240 x 135). The panel's rotation matches the canvas.
+    // colors (32,400 bytes at 240 x 135; in PSRAM on boards that have it). The
+    // panel's rotation matches the canvas.
     canvas = new Arduino_Canvas_Indexed(kWidth, kHeight, display, 0, 0, 0, 0);
-    if (!canvas->begin(board::kDisplaySpeedHz)) {
+    if (!canvas->begin(hal::displaySpeedHz())) {
         return false;
     }
     canvas->setTextWrap(false);
-    const board::Fonts boardFonts = board::fonts();
+    const hal::Fonts boardFonts = hal::fonts();
     measureFont(kBarFont, boardFonts.bar);
     measureFont(kTitleFont, boardFonts.title);
     measureFont(kSmallFont, boardFonts.small);
@@ -630,12 +630,14 @@ void showWelcome(const char* ssid, const char* ip)
 {
     char connected[48];
     snprintf(connected, sizeof(connected), "Connected to %s", ssid);
+    char url[48];
+    snprintf(url, sizeof(url), "%s.local/mcp", board::kHostname);
     const int gap = fonts[kSmallFont].lineHeight / 2;
     const TextLine textLines[] = {
         {"ScreenAPI v" FW_VERSION, kSmallFont, kColorLightGrey, 0},
         {connected, kSmallFont, kWhite, gap},
         {ip, kLargeFont, kColorGreen, gap},
-        {"screenapi.local/mcp", kSmallFont, kColorLightGrey, gap},
+        {url, kSmallFont, kColorLightGrey, gap},
     };
     constexpr size_t kLines = sizeof(textLines) / sizeof(textLines[0]);
     canvas->fillScreen(kBlack);

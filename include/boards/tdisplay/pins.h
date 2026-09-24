@@ -1,10 +1,9 @@
 // Pin assignments for the LilyGO TTGO T-Display.
 // Single source of truth for this board's pins; the BOARDS.md pin table mirrors this file.
-// Every board provides its display pins (used by display.h), PIN_BUTTON_DELETE,
-// and PIN_BUTTON_SCROLL; PIN_BATTERY_ADC and PIN_ADC_EN only with battery sense.
+// Used by src/boards/tdisplay/hal.cpp.
 #pragma once
 
-// ST7789V display on SPI (display.h). MISO is not connected on this board.
+// ST7789V display on SPI. MISO is not connected on this board.
 #define TFT_MOSI 19
 #define TFT_SCLK 18
 #define TFT_CS   5   // strapping pin
