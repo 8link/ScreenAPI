@@ -74,12 +74,13 @@ Left and right margins are 4 px.
 ### Planned repository layout
 
 ```
-platformio.ini   PlatformIO environments; shared [env] defines FW_VERSION; one env per board
+platformio.ini   PlatformIO environments; one env per board
+VERSION          Firmware version, passed to src/ as FW_VERSION by tools/version.py (D-035)
 include/boards/<board>/
                  board.h (name, screen size, rotation, mDNS hostname), pins.h (the board's pins); since 0.0.14 (D-030)
 src/             Firmware sources; src/hal.h with src/boards/<board>/hal.cpp per board since 0.0.16 (D-032);
                  src/boards/template/ is the porting starting point, built by the template env (0.0.17)
-tools/           screenshot.py (F-012)
+tools/           screenshot.py (F-012), version.py (D-035)
 README.md        Project overview for GitHub
 lib/             Project-local libraries
 test/            Unit tests (native env for hardware-independent logic)
@@ -387,6 +388,7 @@ Record decisions that a later change could accidentally undo.
 | D-032 | A hardware layer, `src/hal.h`, with one implementation per board in `src/boards/<board>/hal.cpp`, selected with `build_src_filter`. It owns pins, buses, the display driver, fonts, inputs, and battery reading. | The AMOLED board needs code the T-Display does not (expander reset, touch, power chip, revision detection); per-board source files avoid `#if` chains in shared code. | 2026-09-24 |
 | D-033 | Waveshare AMOLED: portrait 368 x 448; BOOT deletes (hold 1.5 s clears all), a touch on the screen shows the next message, BOOT and touch held 5 s reset Wi-Fi; the revision is detected from the touch chip's I2C address (FT3168 at 0x38 original, CST820 at 0x15 V2). Every board uses the mDNS name `screenapi` (since 0.0.18; `screenapi-amoled` in 0.0.16 and 0.0.17). | User decisions (revision detection, controls, orientation, one mDNS name). One name keeps one MCP URL for all boards; only one board should be online at a time. With two online, ESP-IDF mDNS is expected to rename one (for example `screenapi-2`); not verified. After switching boards, a client can keep the old address for up to about 2 minutes (mDNS cache). | 2026-09-24 |
 | D-034 | Portability first: `src/hal.h` documents the whole board contract, and a template board (`include/boards/template/`, `src/boards/template/`, generic ESP32 with an ST7789 SPI display, no battery) is built by its own `template` env so the starting point for new boards always compiles. | The user asked to focus on hardware independence so ScreenAPI ports easily to any ESP32 with Wi-Fi and a display. A template that is built cannot silently fall out of date. | 2026-09-24 |
+| D-035 | The firmware version lives in the `VERSION` file (one line, `X.Y.Z`); `tools/version.py`, a PlatformIO post script, checks the format and passes it to `src/` as `FW_VERSION`. It is not in platformio.ini. | PlatformIO wipes the whole build folder whenever platformio.ini changes (`compute_project_checksum` hashes the full configuration), so a version bump there rebuilt every library, about 9 minutes per board. Moving the define to `build_src_flags` did not help (measured 548 s). User approved the change of the AGENTS.md rule. | 2026-09-24 |
 
 ## Verification
 

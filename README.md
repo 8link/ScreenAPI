@@ -205,6 +205,7 @@ This repository's [AGENTS.md](AGENTS.md) includes a rule that makes coding agent
 | Build one board | `pio run -e <env> -j 2` |
 | Serial log | `pio device monitor -e <env>` |
 | Screenshot of the device screen | `python3 tools/screenshot.py screen.png --port <port>` |
+| Bump the firmware version | edit `VERSION` (not platformio.ini: any change there triggers a full rebuild) |
 
 The documentation is part of the code:
 

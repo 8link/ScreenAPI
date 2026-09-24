@@ -36,7 +36,7 @@ Precedence:
 - Changes that do not alter the binary (documentation, tests, CI, tooling, .gitignore) do not bump the version. They are still logged and committed with the docs / test / tooling prefix (see Git workflow).
 - PATCH rollover: after 0.0.99, the next firmware change is 0.1.0. This automatic rollover is the only case where MINOR increases without an explicit user request.
 - MAJOR and any other MINOR increase happen only on explicit user request.
-- Single source of truth: the version is defined once, in the shared [env] section of platformio.ini: `build_flags = -D FW_VERSION=\"X.Y.Z\"`. All code, display labels, BLE/web metadata, and esp_app_desc must read FW_VERSION. Never hardcode the version anywhere else. If a hardcoded copy is found, report it.
+- Single source of truth: the version is defined once, in the `VERSION` file at the repository root (one line, `X.Y.Z`). `tools/version.py` passes it to the firmware as `FW_VERSION`. Keep it out of platformio.ini: any change there makes PlatformIO rebuild everything. All code, display labels, BLE/web metadata, and esp_app_desc must read FW_VERSION. Never hardcode the version anywhere else. If a hardcoded copy is found, report it.
 - The version in CHANGELOG.md, FW_VERSION, and the commit message must be identical.
 
 ## Git workflow

@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.18
+**Current firmware version:** 0.0.19
 
 ## Format
 
@@ -39,6 +39,30 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.19 - Move the firmware version to a VERSION file
+
+**Date:** 2026-09-24 07:39
+**Author:** Claude Opus 5.5
+**Type:** Tooling, build
+
+**Summary:**
+The firmware version moved from platformio.ini to a `VERSION` file, passed to `src/` as `FW_VERSION` by `tools/version.py` (D-035). PlatformIO rebuilds everything whenever platformio.ini changes, so every version bump took about 9 minutes per board. A first attempt with `build_src_flags` did not help (548 s for a version-only change) and was replaced. The AGENTS.md versioning rule points to `VERSION` (approved by the user). The firmware behaves the same.
+
+**Changes:**
+- `VERSION` - New. `0.0.19`.
+- `tools/version.py` - New. Reads and checks `VERSION`, defines `FW_VERSION` for `src/` only.
+- `platformio.ini` - No version; `extra_scripts = post:tools/version.py` in `[esp32]`; the per-board `build_flags` no longer include `${env.build_flags}`.
+- `AGENTS.md` - Versioning rule: the `VERSION` file.
+- `PROJECT.md` - D-035; repository layout.
+- `README.md` - Version bump in the development table.
+
+**Verification:**
+- `pio run -e waveshare_amoled18 -j 4`: full build after the platformio.ini change 426 s; after changing only `VERSION` (to 0.0.99 and back) 79 s and 81 s, against 548 s with the version in platformio.ini. Flash 1,581,845 bytes (24.1%). `-j 4` works with the 4 GB swap added on the development machine.
+- `tdisplay` and `template` were still building at commit time; their result is recorded with the next firmware entry.
+
+**Git commit:**
+- `v0.0.19 - Move the firmware version to a VERSION file`
 
 ## 0.0.18 - Use the mDNS name screenapi on every board
 
