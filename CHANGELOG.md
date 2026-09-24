@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.26
+**Current firmware version:** 0.0.27
 
 ## Format
 
@@ -39,6 +39,28 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.27 - Move the ES8311 chime into a shared library
+
+**Date:** 2026-09-24 14:41
+**Author:** Claude Opus 5.5
+**Type:** Refactor
+
+**Summary:**
+The ES8311 setup, I2S output, and chime task moved from the Waveshare AMOLED's hardware layer to `lib/es8311_chime`, so other boards with an ES8311 codec (the M5StickS3 next) share it. A board passes its I2C bus, codec address, I2S pins, and a function that switches its speaker amplifier. No change in sound or behavior intended (F-013).
+
+**Changes:**
+- `lib/es8311_chime/src/es8311_chime.*` - New: codec setup, I2S, chime task, taken from the AMOLED HAL.
+- `src/boards/waveshare_amoled18/hal.cpp` - Uses the library; the amplifier switch stays a GPIO.
+- `VERSION` - `0.0.27`.
+
+**Verification:**
+- `pio test -e native`: 81 of 81 passed.
+- `pio run -j 4`: `waveshare_amoled18` builds; `tdisplay` (flash 1,792,189 bytes, 91.2%) and `template` (flash 1,785,277 bytes, 90.8%) contain `ScreenAPI v0.0.27`.
+- Not checked on the AMOLED: it was unplugged. The build was flashed by mistake onto an M5StickS3 that had been plugged in during the build (it boot-looped on the flash size; see the 0.0.28 entry).
+
+**Git commit:**
+- `v0.0.27 - Move the ES8311 chime into a shared library`
 
 ## docs - Add Codex and OpenCode setup to the README
 
