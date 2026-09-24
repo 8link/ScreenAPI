@@ -40,6 +40,8 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Redact network and device identifiers
+
 ## 0.0.16 - Add Waveshare ESP32-S3-Touch-AMOLED-1.8 board
 
 **Date:** 2026-09-24 05:10
@@ -67,7 +69,7 @@ Second board: Waveshare ESP32-S3-Touch-AMOLED-1.8, env `waveshare_amoled18` (D-0
 **Verification:**
 - `pio test -e native`: 81 of 81 tests passed.
 - `pio run -e tdisplay -j 2`: RAM 86,928 bytes (26.5%), flash 1,791,173 bytes (91.1%). `pio run -e waveshare_amoled18 -j 2`: RAM 95,496 bytes (29.1%), flash 1,582,144 bytes of 6,553,600 (24.1%).
-- AMOLED, flashed 2026-09-24: `Hardware: CO5300 + CST820 (V2), expander ok, AXP2101 ok`; Wi-Fi setup started (`PROV_7B87C8`); screenshot shows the portrait setup screen with the QR code; `B` reads 4,180 mV, 100 %, USB power. First screenshot attempt came back cut off at 256 hex digits per row; fixed with blocking serial during screenshots.
+- AMOLED, flashed 2026-09-24: `Hardware: CO5300 + CST820 (V2), expander ok, AXP2101 ok`; Wi-Fi setup started (`PROV_XXXXXX`); screenshot shows the portrait setup screen with the QR code; `B` reads 4,180 mV, 100 %, USB power. First screenshot attempt came back cut off at 256 hex digits per row; fixed with blocking serial during screenshots.
 - Not yet: the AMOLED panel by eye, touch, BOOT, Wi-Fi pairing, MCP; anything on the T-Display (disconnected; 0.0.15 and 0.0.16 both unverified there); the SH8601 path (no original-revision board).
 
 **Git commit:**
@@ -153,7 +155,7 @@ The top bar clock shows local time (F-008, D-029): NTP for the time, the current
 **Verification:**
 - `pio test -e native`: 81 of 81 tests passed.
 - `pio run -e tdisplay` succeeded: RAM 86,832 bytes (26.5%) static, flash 1,781,937 bytes (90.6%). A first version with HTTPClient reached 98.0% flash and was replaced.
-- On device: `Clock: timezone Europe/Warsaw, UTC offset +7200 s`, `Clock: NTP time received`; screenshot shows 20:58 with the host at 18:58 UTC. Free heap 156,724 bytes.
+- On device: `Clock: timezone <timezone>, UTC offset +7200 s`, `Clock: NTP time received`; screenshot shows 20:58 with the host at 18:58 UTC. Free heap 156,724 bytes.
 
 **Git commit:**
 - `v0.0.13 - Add clock with NTP and IP-based timezone`
@@ -280,7 +282,7 @@ MCP server on the device (F-003, D-025): Streamable HTTP without streaming or se
 **Verification:**
 - `pio test -e native`: 74 of 74 tests passed.
 - `pio run -e tdisplay` succeeded: RAM 85,476 bytes (26.1%) static, flash 1,764,553 of 1,966,080 bytes (89.7%). No new warnings.
-- On device, from a machine on the same LAN: initialize (175 ms), notifications/initialized (202), tools/list, show_message (78 ms, test message shown), queue_status, validation error, GET 405, foreign Origin 403. mDNS query for `screenapi.local` answered with 192.168.10.122. Free heap 159,824 bytes after boot.
+- On device, from a machine on the same LAN: initialize (175 ms), notifications/initialized (202), tools/list, show_message (78 ms, test message shown), queue_status, validation error, GET 405, foreign Origin 403. mDNS query for `screenapi.local` answered with <device IP>. Free heap 159,824 bytes after boot.
 - Not yet: a session from Claude Code; the queue-full popup on the device.
 
 **Git commit:**
@@ -311,7 +313,7 @@ Wi-Fi station with ESP BLE Provisioning (F-002, D-023): setup screen with QR cod
 **Verification:**
 - `pio test -e native`: 58 of 58 tests passed.
 - `pio run -e tdisplay` succeeded: RAM 81,204 bytes (24.8%) static, flash 1,658,345 of 1,966,080 bytes (84.3%). No new warnings.
-- Flashed. First boot: LittleFS formatted at the new location, demo messages added and saved. The board had a saved network (`WLAN3`): connected, IP 192.168.10.122. After the Q-005 fix: no `bt_mem_release ... failed 259` errors, `btInUse` returns 1, free heap 164,836 bytes, largest block 98,292 bytes.
+- Flashed. First boot: LittleFS formatted at the new location, demo messages added and saved. The board had a saved network (`<SSID>`): connected, IP <device IP>. After the Q-005 fix: no `bt_mem_release ... failed 259` errors, `btInUse` returns 1, free heap 164,836 bytes, largest block 98,292 bytes.
 - Not yet tested on the device: setup screen, pairing with the app, wrong password, Wi-Fi reset.
 
 **Git commit:**

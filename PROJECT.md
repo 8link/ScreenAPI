@@ -134,7 +134,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Network lost: message screen with `no network`; the device retries every 15 s in addition to the core's auto-reconnect.
   - Wi-Fi reset: hold both buttons for 5 s (F-006). The screen shows "Wi-Fi reset, restarting"; the saved network is erased and the device restarts into setup.
   - Serial: `Wi-Fi setup: ...` lines for the setup steps, `Wi-Fi: connected to <SSID>, IP <ip>`, `Wi-Fi: disconnected, reason N`, `Wi-Fi: reconnecting`.
-- **Verification:** On device, 2026-09-23 (0.0.7): the board had saved settings from before this project (BOARDS.md Wi-Fi); it connected to `WLAN3` and got 192.168.10.122 about 0.9 s after boot; BLE memory was released (free heap 164,836 bytes). Not yet tested: the setup screen, pairing with the app, wrong-password handling, and the Wi-Fi reset.
+- **Verification:** On device, 2026-09-23 (0.0.7): the board had saved settings from before this project (BOARDS.md Wi-Fi); it connected to `<SSID>` and got <device IP> about 0.9 s after boot; BLE memory was released (free heap 164,836 bytes). Not yet tested: the setup screen, pairing with the app, wrong-password handling, and the Wi-Fi reset.
 
 ### F-003 - MCP server on device
 
@@ -156,7 +156,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Origin check: a request with an `Origin` header other than `http://<device-ip>` or `http://screenapi.local` gets 403, so web pages cannot post to the device (DNS rebinding protection required by the MCP spec). Claude Code sends no Origin.
   - Serial: `MCP: <method or tool>: <result>` per request.
   - Connect Claude Code: `claude mcp add --transport http screen http://screenapi.local/mcp` (or the IP address). On Linux, `.local` names need an mDNS resolver: `apt-get install avahi-daemon libnss-mdns` (adds `mdns4_minimal` to the `hosts` line in `/etc/nsswitch.conf`). macOS and Windows resolve `.local` without extra setup.
-- **Verification:** `pio test -e native`: 16 tests in `test_mcp_protocol` (initialize and version negotiation, notifications, ping, tools/list, protocol errors, all show_message fields and defaults, replace by id, validation errors, cleanup and limits, full queue, queue_status, text cleanup). On device, 2026-09-23 (0.0.8), from a machine on the same LAN: initialize 175 ms, show_message 78 ms, tools/list, queue_status, validation error, GET 405, foreign Origin 403; mDNS query for `screenapi.local` answered with 192.168.10.122. Claude Code 2.1.280 on the development machine (Debian 13, after installing avahi-daemon and libnss-mdns), 2026-09-23: `claude mcp list` reports `screen: http://screenapi.local/mcp (HTTP) - Connected`. Not yet: a tool call from a Claude Code session; the full-queue path on the device.
+- **Verification:** `pio test -e native`: 16 tests in `test_mcp_protocol` (initialize and version negotiation, notifications, ping, tools/list, protocol errors, all show_message fields and defaults, replace by id, validation errors, cleanup and limits, full queue, queue_status, text cleanup). On device, 2026-09-23 (0.0.8), from a machine on the same LAN: initialize 175 ms, show_message 78 ms, tools/list, queue_status, validation error, GET 405, foreign Origin 403; mDNS query for `screenapi.local` answered with <device IP>. Claude Code 2.1.280 on the development machine (Debian 13, after installing avahi-daemon and libnss-mdns), 2026-09-23: `claude mcp list` reports `screen: http://screenapi.local/mcp (HTTP) - Connected`. Not yet: a tool call from a Claude Code session; the full-queue path on the device.
 
 ### F-004 - Message queue and lifecycle
 
@@ -249,7 +249,7 @@ Stable IDs F-001, F-002, ... Reference them from code comments, CHANGELOG.md, an
   - Display: 24-hour `HH:MM`; `--:--` until both the NTP time and the offset are known. No fallback to UTC.
   - A lookup blocks the loop for its duration (about 0.2 s observed; at most 3 s timeout).
   - Serial: `Clock: timezone <zone>, UTC offset +N s` when the offset changes, `Clock: NTP time received`, `Clock: timezone lookup failed ...`.
-- **Verification:** `pio test -e native`: 5 tests in `test_clock_logic` (reply parsing, failures, HTTP status and body split, time formatting across midnight and negative offsets). On device, 2026-09-23 (0.0.13): `Clock: timezone Europe/Warsaw, UTC offset +7200 s` 0.2 s after connecting, NTP synced 1 s later; the screenshot showed 20:58 while the host clock read 18:58 UTC.
+- **Verification:** `pio test -e native`: 5 tests in `test_clock_logic` (reply parsing, failures, HTTP status and body split, time formatting across midnight and negative offsets). On device, 2026-09-23 (0.0.13): `Clock: timezone <timezone>, UTC offset +7200 s` 0.2 s after connecting, NTP synced 1 s later; the screenshot showed 20:58 while the host clock read 18:58 UTC.
 
 ### F-009 - Welcome screen and IP message
 
@@ -414,5 +414,5 @@ Known unknowns and issues found outside the current task. Smaller per-feature de
 - Memory budget: baseline with 0.0.13 (Wi-Fi, MCP server, mDNS, clock): static RAM 86,832 bytes, free heap 156,724 bytes, largest free block 94,196 bytes after boot. Flash: 1,781,937 of 1,966,080 bytes (90.6%); about 180 KB left in the app slot. Avoid HTTPClient (about 150 KB of TLS code). Re-check as features land.
 - The core's WebServer reads the whole request body into memory before the handler checks the 8 KB limit, so a LAN client sending a very large Content-Length can exhaust the heap. Accepted for now together with D-011 (no authentication on the LAN).
 - Wi-Fi setup path (F-002) not yet tested on the device, because the board already had saved settings. Test by holding both buttons for 5 s, then pairing with the ESP BLE Provisioning app.
-- The board came with saved Wi-Fi settings for `WLAN3` that this project did not write (BOARDS.md Wi-Fi). Unknown origin; confirm it is the intended network.
+- The board came with saved Wi-Fi settings for `<SSID>` that this project did not write (BOARDS.md Wi-Fi). Unknown origin; confirm it is the intended network.
 - `esp_app_desc` does not carry FW_VERSION. The built image reports project name `arduino-lib-builder` and app version `esp-idf: v4.4.7 38eeba213a`, from the precompiled Arduino core. This does not meet the AGENTS.md rule that esp_app_desc reads FW_VERSION. Options (override the descriptor, or accept it for the Arduino framework) TBD.

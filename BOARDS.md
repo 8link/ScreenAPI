@@ -27,7 +27,7 @@ Sources: vendor repository https://github.com/Xinyuan-LilyGO/TTGO-T-Display (rea
 
 ### MCU
 
-- **Chip:** ESP32-D0WDQ6, revision v1.0 (reported by esptool on the unit in hand, 2026-09-22). MAC 24:6f:28:25:36:e8.
+- **Chip:** ESP32-D0WDQ6, revision v1.0 (reported by esptool on the unit in hand, 2026-09-22).
 - **Cores:** 2 (Xtensa LX6)
 - **Clock:** 240 MHz (PlatformIO board definition)
 - **Flash (size / mode / speed):** 4 MB (W25Q32 on the schematic) / DIO / 40 MHz (PlatformIO board definition)
@@ -136,7 +136,7 @@ None on board.
 
 - **Stack (NimBLE / Bluedroid):** Bluedroid, from the precompiled Arduino core, used through ESP-IDF `wifi_provisioning` (Arduino `WiFiProv`).
 - **Role:** peripheral during Wi-Fi provisioning (PROJECT.md F-002). The stack's memory is released after setup, or right at boot when already provisioned; BLE is off in normal operation. Needs the `btInUse()` override (Q-005).
-- **Services and UUIDs:** ESP BLE Provisioning protocol; service UUID from the Arduino `WiFiProv` wrapper (`custom_service_uuid`). Advertised name `PROV_` + last 3 MAC bytes (`PROV_2536E8` on the unit in hand).
+- **Services and UUIDs:** ESP BLE Provisioning protocol; service UUID from the Arduino `WiFiProv` wrapper (`custom_service_uuid`). Advertised name `PROV_` + last 3 MAC bytes (`PROV_XXXXXX` on the unit in hand).
 - **MTU:** TBD
 - **Connection interval:** TBD
 - **Observed quirks:** TBD
@@ -145,7 +145,7 @@ None on board.
 ### Wi-Fi
 
 - **Modes:** station (PROJECT.md F-002)
-- **Saved settings found:** the unit in hand came with a saved network, `WLAN3`, not written by this project; with 0.0.7 it connected and got 192.168.10.122 by DHCP about 0.9 s after boot (2026-09-23).
+- **Saved settings found:** the unit in hand came with a saved network, `<SSID>`, not written by this project; with 0.0.7 it connected and got <device IP> by DHCP about 0.9 s after boot (2026-09-23).
 - **Antenna:** on-board antenna (schematic); type TBD
 - **mDNS:** the ESPmDNS responder answers `screenapi.local` with the station IP (raw mDNS query from the LAN, 0.0.8, 2026-09-23).
 - **Observed RSSI:** TBD
@@ -238,7 +238,7 @@ Sources: vendor repository https://github.com/waveshareteam/ESP32-S3-Touch-AMOLE
 
 ### MCU
 
-- **Chip:** ESP32-S3 (QFN56), revision v0.2, embedded 8 MB PSRAM (AP_3v3); reported by esptool, 2026-09-24. MAC 1c:db:d4:7b:87:c8.
+- **Chip:** ESP32-S3 (QFN56), revision v0.2, embedded 8 MB PSRAM (AP_3v3); reported by esptool, 2026-09-24.
 - **Cores:** 2 (Xtensa LX7)
 - **Clock:** 240 MHz
 - **Flash (size / mode / speed):** 16 MB, quad (eFuse), 3.3 V; esptool 2026-09-24
@@ -294,7 +294,7 @@ Not used by ScreenAPI: audio (ES8311: MCLK 16, BCLK 9, WS 45, DOUT 8, DIN 10, am
 
 ### BLE
 
-- **Role:** peripheral during Wi-Fi provisioning; advertised name `PROV_7B87C8` on the unit in hand. The setup screen appeared on the first boot (no saved network), 2026-09-24; pairing with the app not yet tested.
+- **Role:** peripheral during Wi-Fi provisioning; advertised name `PROV_XXXXXX` on the unit in hand. The setup screen appeared on the first boot (no saved network), 2026-09-24; pairing with the app not yet tested.
 
 ### Wi-Fi
 
@@ -331,7 +331,7 @@ Not used by ScreenAPI: audio (ES8311: MCLK 16, BCLK 9, WS 45, DOUT 8, DIN 10, am
 ```
 ScreenAPI v0.0.16 on Waveshare ESP32-S3-Touch-AMOLED-1.8
 Hardware: CO5300 + CST820 (V2), expander ok, AXP2101 ok
-Wi-Fi setup: waiting for the app, device PROV_7B87C8
+Wi-Fi setup: waiting for the app, device PROV_XXXXXX
 Storage: LittleFS 8192 of 3538944 bytes used
 Restored 0 messages
 Free heap: 156532 bytes, largest block: 147444 bytes
