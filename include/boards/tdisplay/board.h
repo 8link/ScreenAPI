@@ -16,9 +16,10 @@ constexpr const char* kName = "LilyGO TTGO T-Display";
 constexpr int kScreenWidth = 240;
 constexpr int kScreenHeight = 135;
 constexpr uint8_t kScreenRotation = 1;  // landscape
-// Rounded display corners in px (0: square). Content near the corners moves
-// in accordingly (PROJECT.md D-036).
-constexpr int kCornerRadius = 0;
+// Rounded or covered display corners: how far from a corner, along the
+// diagonal, content is fully visible; 0 for square panels. Measure it with the
+// corner test (serial command C, PROJECT.md D-036).
+constexpr int kCornerInset = 0;
 
 // Name for mDNS (<hostname>.local) and the MCP URL shown on screen. The same on
 // every board (D-033), so clients keep one URL whichever board is online.

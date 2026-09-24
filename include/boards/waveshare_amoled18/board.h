@@ -15,10 +15,12 @@ constexpr const char* kName = "Waveshare ESP32-S3-Touch-AMOLED-1.8";
 constexpr int kScreenWidth = 368;
 constexpr int kScreenHeight = 448;
 constexpr uint8_t kScreenRotation = 0;
-// Rounded display corners in px. Not documented by Waveshare; measured with the
-// corner test (serial command C, PROJECT.md D-036): the 20 px arc, the smallest
-// drawn, is fully visible, so the radius is at most 20 px.
-constexpr int kCornerRadius = 20;
+// Rounded display corners: how far from a corner, along the diagonal, content
+// is fully visible. Not documented by Waveshare; measured with the corner test
+// (serial command C, PROJECT.md D-036): the square at 24 px is the first one
+// complete in all four corners. The outermost pixel row and column on every
+// edge are not visible either.
+constexpr int kCornerInset = 24;
 
 // Name for mDNS (<hostname>.local) and the MCP URL shown on screen. The same on
 // every board (D-033), so clients keep one URL whichever board is online.

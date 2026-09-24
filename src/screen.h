@@ -54,9 +54,9 @@ void showQueueFullPopup(uint64_t nowMs);
 // at 115200 baud on the T-Display.
 void sendScreenshot(Print& out);
 
-// Calibration for rounded display corners (D-036): colored arcs of radius 20 to
-// 70 px in each corner and a legend. The smallest fully visible arc gives
-// board::kCornerRadius.
+// Calibration for rounded display corners (D-036): colored squares along each
+// corner's diagonal at insets of 0 to 48 px, a frame on the screen edges, and a
+// legend. The first square complete in every corner gives board::kCornerMargin.
 void showCornerTest();
 
 // One centered line of text on an otherwise empty screen.

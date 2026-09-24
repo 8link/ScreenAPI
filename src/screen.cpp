@@ -2,6 +2,7 @@
 
 #include <countdown.h>
 #include <markup.h>
+#include <math.h>
 #include <qrcode.h>
 #include <scroll_offset.h>
 #include <string.h>
@@ -25,10 +26,14 @@ constexpr int kCountdownPadding = 5;
 constexpr int kPillGap = 3;
 constexpr int kPillPadding = 4;
 
-// Rounded display corners (D-036): content that must stay visible near a corner
-// is moved in by where the corner arc meets the diagonal, R * (1 - 1/sqrt(2)),
-// about 29 % of the radius, plus 1 px.
-constexpr int kCornerMargin = board::kCornerRadius > 0 ? (board::kCornerRadius * 293 + 999) / 1000 + 1 : 0;
+// Rounded display corners (D-036). The corner test measures the diagonal inset
+// d at which content is complete; a circular corner of radius R reaches the
+// diagonal at R * (1 - 1/sqrt(2)), so R is at most d / 0.293. Layout uses that
+// upper bound so nothing is cut: on rounded boards the top bar sits high with
+// capsule pills and enough room at the sides, on black instead of a bar color.
+constexpr bool kRoundedCorners = board::kCornerInset > 0;
+constexpr int kCornerRadiusMax = (board::kCornerInset * 1000 + 292) / 293;
+constexpr int kRoundedBarTop = 8;
 
 constexpr uint32_t kTitleSpeedPxPerS = 40;
 constexpr uint32_t kValueSpeedPxPerS = 20;
@@ -66,6 +71,11 @@ struct FontMetrics {
 };
 
 struct Layout {
+    int barTop;       // top of the pill row
+    int barSide;      // left and right inset of the pill row
+    int pillRadius;
+    int countdownRadius;
+    int countdownMargin;  // inset of the countdown box from the bottom right corner
     int pillHeight;
     int barHeight;
     int titleTop;
@@ -186,15 +196,38 @@ int drawTextMiddle(const char* text, int x, int centerY, Align align, FontId fon
     return drawText(text, x, centerY + metrics.capHeight / 2 - metrics.ascent, align, font, color);
 }
 
+// Horizontal inset for a shape with corner radius r whose top edge is at top,
+// so that it stays inside a circular display corner of radius kCornerRadiusMax.
+int cornerClearance(int top, int r)
+{
+    const float big = kCornerRadiusMax - r;
+    const float dy = kCornerRadiusMax - top - r;
+    if (dy <= 0) {
+        return 0;
+    }
+    return static_cast<int>(big - sqrtf(big * big - dy * dy)) + 2;
+}
+
+// Inset from a corner along the diagonal for a shape with corner radius r.
+int diagonalClearance(int r)
+{
+    return static_cast<int>((kCornerRadiusMax - r) * 0.2929f) + 2;
+}
+
 void computeLayout()
 {
     Layout& rows = layoutRows;
     rows.pillHeight = fonts[kBarFont].lineHeight + 2;
-    rows.barHeight = kCornerMargin + rows.pillHeight + 2;
+    rows.pillRadius = kRoundedCorners ? rows.pillHeight / 2 : 4;
+    rows.barTop = kRoundedCorners ? kRoundedBarTop : 0;
+    rows.barSide = kRoundedCorners ? cornerClearance(rows.barTop + 1, rows.pillRadius) : 0;
+    rows.barHeight = rows.barTop + rows.pillHeight + 2;
     rows.titleTop = rows.barHeight + 3;
     rows.valueTop = rows.titleTop + fonts[kTitleFont].lineHeight + 4;  // divider line at valueTop - 2
     rows.valueHeight = kHeight - rows.valueTop;
     rows.countdownHeight = fonts[kSmallFont].lineHeight + 4;
+    rows.countdownRadius = kRoundedCorners ? rows.countdownHeight / 2 : 3;
+    rows.countdownMargin = kRoundedCorners ? diagonalClearance(rows.countdownRadius) : 0;
 }
 
 FontId fontFor(mq::FontSize size)
@@ -303,10 +336,11 @@ void drawCountdown(uint32_t seconds)
     ui::formatCountdown(seconds, text, sizeof(text));
     const int height = layoutRows.countdownHeight;
     const int width = textWidth(text, kSmallFont) + 2 * kCountdownPadding;
-    const int x = kWidth - width - 2 - kCornerMargin;
-    const int y = kHeight - height - 2 - kCornerMargin;
-    canvas->fillRoundRect(x, y, width, height, 3, kBlack);
-    canvas->drawRoundRect(x, y, width, height, 3, kDarkGrey);
+    const int radius = layoutRows.countdownRadius;
+    const int x = kWidth - width - 2 - layoutRows.countdownMargin;
+    const int y = kHeight - height - 2 - layoutRows.countdownMargin;
+    canvas->fillRoundRect(x, y, width, height, radius, kBlack);
+    canvas->drawRoundRect(x, y, width, height, radius, kDarkGrey);
     drawTextMiddle(text, x + width / 2, y + height / 2, Align::Center, kSmallFont, kColorLightGrey);
 }
 
@@ -319,7 +353,7 @@ void drawEmpty()
 // Rounded background for one top bar element.
 void drawPill(int x, int width, uint16_t color)
 {
-    canvas->fillRoundRect(x, kCornerMargin + 1, width, layoutRows.pillHeight, 4, color);
+    canvas->fillRoundRect(x, layoutRows.barTop + 1, width, layoutRows.pillHeight, layoutRows.pillRadius, color);
 }
 
 // Battery outline, sized to the pill (18 x 9 px on the T-Display). On battery:
@@ -334,7 +368,7 @@ void drawBatteryIcon(int x, const StatusBar& bar)
 {
     const int bodyHeight = layoutRows.pillHeight / 2;
     const int bodyWidth = bodyHeight * 16 / 9;
-    const int y = kCornerMargin + 1 + (layoutRows.pillHeight - bodyHeight) / 2;
+    const int y = layoutRows.barTop + 1 + (layoutRows.pillHeight - bodyHeight) / 2;
     const int nub = bodyHeight / 3;
     canvas->drawRect(x, y, bodyWidth, bodyHeight, kColorLightGrey);
     canvas->fillRect(x + bodyWidth, y + nub, 2, bodyHeight - 2 * nub, kColorLightGrey);
@@ -375,12 +409,14 @@ uint16_t linkColor(Link link)
 // left, with a status stripe on its left edge (D-028).
 void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
 {
-    const int centerY = kCornerMargin + 1 + layoutRows.pillHeight / 2;
-    canvas->fillRect(0, 0, kWidth, layoutRows.barHeight, kBarBackground);
+    const int centerY = layoutRows.barTop + 1 + layoutRows.pillHeight / 2;
+    if (!kRoundedCorners) {
+        canvas->fillRect(0, 0, kWidth, layoutRows.barHeight, kBarBackground);
+    }
 
     // Clock
     const int clockWidth = textWidth("88:88", kBarFont) + 2 * kPillPadding;
-    const int clockX = kWidth - 2 - kCornerMargin - clockWidth;
+    const int clockX = kWidth - 2 - layoutRows.barSide - clockWidth;
     drawPill(clockX, clockWidth, kPillBackground);
     drawTextMiddle(bar.clock, clockX + clockWidth / 2, centerY, Align::Center, kBarFont, kWhite);
 
@@ -405,11 +441,19 @@ void drawTopBar(const mq::MessageQueue& queue, const StatusBar& bar)
 
     // Network: status stripe, then the label in the remaining space
     constexpr int kStripeWidth = 3;
-    const int networkX = 2 + kCornerMargin;
+    const int networkX = 2 + layoutRows.barSide;
     const int networkWidth = queueX - kPillGap - networkX;
     drawPill(networkX, networkWidth, kPillBackground);
-    canvas->fillRect(networkX + 2, kCornerMargin + 4, kStripeWidth, layoutRows.pillHeight - 6, linkColor(bar.link));
-    drawTextMiddle(bar.network, networkX + 2 + kStripeWidth + 3, centerY, Align::Left, kBarFont, kColorLightGrey);
+    int textX = networkX + 2 + kStripeWidth + 3;
+    if (kRoundedCorners) {
+        // A stripe would stick out of the capsule's rounded end; use a dot inside it.
+        const int r = layoutRows.pillRadius;
+        canvas->fillCircle(networkX + r, centerY, r / 2, linkColor(bar.link));
+        textX = networkX + 2 * r;
+    } else {
+        canvas->fillRect(networkX + 2, 4, kStripeWidth, layoutRows.pillHeight - 6, linkColor(bar.link));
+    }
+    drawTextMiddle(bar.network, textX, centerY, Align::Left, kBarFont, kColorLightGrey);
 }
 
 void drawTitle(uint64_t elapsedMs)
@@ -653,37 +697,42 @@ void showWelcome(const char* ssid, const char* ip)
 
 void showCornerTest()
 {
-    // Arcs tangent to both edges of each corner, radius 20 to 70 px. An arc is
-    // fully visible when its radius is at least the panel's corner radius.
-    struct Arc {
-        int radius;
+    // Colored 8 x 8 px squares along each corner's diagonal, moved in by 0 to
+    // 48 px, and a 1 px white frame on the screen edges. The first square that
+    // is complete in every corner gives the corner margin; a missing edge line
+    // means a display offset rather than the corner radius.
+    struct Mark {
+        int inset;
         uint16_t color;
         const char* name;
     };
-    const Arc arcs[] = {
-        {20, kWhite, "20 white"},        {30, kColorGreen, "30 green"},    {40, kBlue, "40 blue"},
-        {50, kColorRed, "50 red"},       {60, kQueueAccent, "60 amber"}, {70, kColorLightGrey, "70 grey"},
+    const Mark marks[] = {
+        {0, kWhite, "0 white"},    {8, kColorGreen, "8 green"},      {16, kBlue, "16 blue"},
+        {24, kColorRed, "24 red"}, {32, kQueueAccent, "32 amber"}, {40, kColorLightGrey, "40 grey"},
+        {48, 0xF81F, "48 pink"},
     };
+    constexpr int kSquare = 8;
     canvas->fillScreen(kBlack);
-    // drawArc angles: 0 degrees points right and angles grow clockwise (checked
-    // with a screenshot), so 180 to 270 is the top-left quarter.
-    for (const Arc& arc : arcs) {
-        const int r = arc.radius;
-        const int right = kWidth - 1 - r;
-        const int bottom = kHeight - 1 - r;
-        canvas->drawArc(r, r, r, r - 1, 180, 270, arc.color);
-        canvas->drawArc(right, r, r, r - 1, 270, 360, arc.color);
-        canvas->drawArc(right, bottom, r, r - 1, 0, 90, arc.color);
-        canvas->drawArc(r, bottom, r, r - 1, 90, 180, arc.color);
+    canvas->drawRect(0, 0, kWidth, kHeight, kWhite);
+    for (const Mark& mark : marks) {
+        const int near = mark.inset;
+        const int far = kWidth - kSquare - mark.inset;
+        const int bottom = kHeight - kSquare - mark.inset;
+        canvas->fillRect(near, near, kSquare, kSquare, mark.color);
+        canvas->fillRect(far, near, kSquare, kSquare, mark.color);
+        canvas->fillRect(far, bottom, kSquare, kSquare, mark.color);
+        canvas->fillRect(near, bottom, kSquare, kSquare, mark.color);
     }
     const int lineHeight = fonts[kSmallFont].lineHeight;
-    int top = (kHeight - 8 * lineHeight) / 2;
+    int top = (kHeight - 10 * lineHeight) / 2;
     drawText("Corner test", kWidth / 2, top, Align::Center, kSmallFont, kWhite);
     top += lineHeight;
-    drawText("smallest full arc:", kWidth / 2, top, Align::Center, kSmallFont, kColorLightGrey);
-    for (const Arc& arc : arcs) {
+    drawText("first square complete", kWidth / 2, top, Align::Center, kSmallFont, kColorLightGrey);
+    top += lineHeight;
+    drawText("in all 4 corners:", kWidth / 2, top, Align::Center, kSmallFont, kColorLightGrey);
+    for (const Mark& mark : marks) {
         top += lineHeight;
-        drawText(arc.name, kWidth / 2, top, Align::Center, kSmallFont, arc.color);
+        drawText(mark.name, kWidth / 2, top, Align::Center, kSmallFont, mark.color);
     }
     canvas->flush();
 }

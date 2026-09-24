@@ -1,6 +1,6 @@
 # CHANGELOG.md
 
-**Current firmware version:** 0.0.21
+**Current firmware version:** 0.0.22
 
 ## Format
 
@@ -39,6 +39,29 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 ```
 
 ---
+
+## 0.0.22 - Fit top bar and countdown into the AMOLED's rounded corners
+
+**Date:** 2026-09-24 09:16
+**Author:** Claude Opus 5.5
+**Type:** Display
+
+**Summary:**
+0.0.21 still cut the corners: its arc test was misread (20 px). A clearer corner test (squares along the diagonal, a frame on the edges) measured 24 px (D-036). A first layout with 24 px on both sides was complete but left a large colored band above the bar. Now, on boards with rounded corners, the top bar sits high on black with capsule pills and a status dot, and the countdown is a capsule; the side and corner insets are computed from the largest radius the measurement allows. The user checked it on the panel: nothing cut, looks right. Square boards are unchanged.
+
+**Changes:**
+- `src/screen.cpp`, `src/screen.h` - Corner test with squares and an edge frame; layout for rounded corners (bar top, side inset, capsule pills, status dot, no bar background, capsule countdown with diagonal inset).
+- `include/boards/*/board.h` - `kCornerInset` replaces `kCornerRadius`: AMOLED 24, T-Display and template 0.
+- `VERSION` - `0.0.22`.
+- `PROJECT.md` - D-036; F-007.
+- `BOARDS.md` - AMOLED rounded corners and hidden edge pixels.
+
+**Verification:**
+- AMOLED: corner test read by the user (square at 16 px cut, 24 px complete, frame not visible on any edge); screenshot of the final layout; the user confirmed on the panel that nothing is cut.
+- `pio run -j 4`, source files only: `waveshare_amoled18` 81 s (flashed), `tdisplay` 84 s (flash 1,791,925 bytes, 91.1%), `template` 82 s (flash 1,785,057 bytes, 90.8%).
+
+**Git commit:**
+- `v0.0.22 - Fit top bar and countdown into the AMOLED's rounded corners`
 
 ## 0.0.21 - Keep top bar and countdown clear of rounded corners
 
