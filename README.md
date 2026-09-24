@@ -1,6 +1,6 @@
 # ScreenAPI
 
-**A small Wi-Fi desk display for your AI agents.** An ESP32 board with a screen runs an [MCP](https://modelcontextprotocol.io) server on your local network. Claude Code, or any other MCP client, sends it status messages, and the device takes care of showing them: queuing, scrolling, colors, timers, and button or touch controls.
+**A small Wi-Fi desk display for your AI agents.** An ESP32 board with a screen runs an [MCP](https://modelcontextprotocol.io) server on your local network. Claude Code, Codex, OpenCode, or any other MCP client sends it status messages, and the device takes care of showing them: queuing, scrolling, colors, timers, and button or touch controls.
 
 ![PlatformIO](https://img.shields.io/badge/build-PlatformIO-orange)
 ![Arduino](https://img.shields.io/badge/framework-Arduino%20(ESP32)-00979D)
@@ -45,7 +45,7 @@
 
 ```mermaid
 flowchart LR
-    A["Claude Code<br/>or any MCP client"] -- "MCP over HTTP<br/>show_message / queue_status" --> B
+    A["Claude Code, Codex, OpenCode<br/>or any MCP client"] -- "MCP over HTTP<br/>show_message / queue_status" --> B
     subgraph B["ESP32 board"]
         direction TB
         M["MCP server<br/>/mcp on port 80"] --> Q["Message queue<br/>30 slots, id replace,<br/>timers"]
@@ -163,19 +163,62 @@ pio run -e waveshare_amoled18 -j 2 -t upload --upload-port /dev/ttyACM0
 
 On first start the board shows a QR code. Scan it with the **ESP BLE Provisioning** app (Espressif, Android and iOS), pick your network, and enter the password. The board connects, shows a welcome screen with its IP address, and remembers the network. To change networks later, hold both inputs for 5 seconds.
 
-### 3. Connect Claude Code
+### 3. Connect your coding agent
+
+The endpoint is `http://screenapi.local/mcp`: MCP over plain HTTP, no login or token. Name the server `screen` in any client.
+
+**Claude Code**
 
 ```sh
 claude mcp add --transport http screen http://screenapi.local/mcp
 ```
 
-On Linux, `.local` names need an mDNS resolver (`avahi-daemon` and `libnss-mdns`); otherwise use the IP address from the welcome screen.
+Check it with `/mcp` inside Claude Code.
 
-Every board answers at `screenapi.local`, so one Claude Code setting works whichever board is plugged in. Keep one board online at a time; after switching boards, reconnect with `/mcp` in Claude Code, and allow up to about 2 minutes for the old address to leave the mDNS cache.
+**Codex** (CLI, IDE extension, and desktop app share one config)
+
+```sh
+codex mcp add screen --url http://screenapi.local/mcp
+```
+
+This adds the following to `~/.codex/config.toml`, which you can also write by hand:
+
+```toml
+[mcp_servers.screen]
+url = "http://screenapi.local/mcp"
+```
+
+Check it with `codex mcp list` (status `enabled`) or `/mcp` inside Codex. Codex prints that the server "may or may not require login"; it does not, so skip `codex mcp login`.
+
+**OpenCode**
+
+OpenCode has no `mcp add` command; add the server to `~/.config/opencode/opencode.json` (all projects) or to `opencode.json` in a project:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "screen": {
+      "type": "remote",
+      "url": "http://screenapi.local/mcp",
+      "enabled": true,
+      "oauth": false
+    }
+  }
+}
+```
+
+`"oauth": false` stops OpenCode from looking for a login the display does not have. Check it with `opencode mcp list`, which should show `screen connected`.
+
+**Any other client:** point it at `http://screenapi.local/mcp` with the Streamable HTTP transport. The server answers in JSON and does not use sessions or server-to-client streams.
+
+On Linux, `.local` names need an mDNS resolver (`avahi-daemon` and `libnss-mdns`); otherwise use the IP address from the welcome screen in place of `screenapi.local`.
+
+Every board answers at `screenapi.local`, so one setting works whichever board is plugged in. Keep one board online at a time; after switching boards, reconnect (`/mcp` in Claude Code or Codex, or restart OpenCode), and allow up to about 2 minutes for the old address to leave the mDNS cache.
 
 ## Sending messages
 
-From Claude Code, just ask: *"Show 'Deploy finished' in green on the screen for 30 seconds."*
+From any connected agent, just ask: *"Show 'Deploy finished' in green on the screen for 30 seconds."* In OpenCode, naming the server helps: *"... use the screen tool."*
 
 The `show_message` tool takes:
 

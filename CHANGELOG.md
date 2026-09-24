@@ -40,6 +40,8 @@ Made simulated temperature rise with speed, PWM/current load, and acceleration i
 
 ---
 
+## docs - Add Codex and OpenCode setup to the README
+
 ## docs - Add curl examples for sending messages by hand to the README
 
 ## 0.0.26 - Chime on new messages on boards with a speaker
