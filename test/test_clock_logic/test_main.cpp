@@ -77,6 +77,40 @@ static void test_http_body()
     TEST_ASSERT_FALSE(httpBody("garbage 200 xx\r\n\r\n", 18, body, length));
 }
 
+static void test_format_arrival()
+{
+    char text[24];
+    // 2026-09-24 22:30:00 UTC; with +2 h it is 00:30 on the 25th locally.
+    const int64_t received = 1790289000;
+    formatArrival(received, received + 3600, 0, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("22:30", text);  // same day
+    formatArrival(received, received + 2 * 3600, 0, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("22:30 24-09-2026", text);  // past midnight UTC
+    formatArrival(received, received + 2 * 3600, 7200, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("00:30", text);  // both on the 25th locally
+    formatArrival(received, received + 30 * 86400, 7200, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("00:30 25-09-2026", text);
+    formatArrival(received, 0, 0, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("22:30 24-09-2026", text);  // current time unknown
+    formatArrival(received, received, -9 * 3600, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("13:30", text);  // negative offset
+}
+
+static void test_format_arrival_dates()
+{
+    char text[24];
+    formatArrival(0, 1, 0, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("00:00", text);
+    formatArrival(951782400, 1, 0, text, sizeof(text));  // leap day 2000
+    TEST_ASSERT_EQUAL_STRING("00:00 29-02-2000", text);
+    formatArrival(1735689599, 1, 0, text, sizeof(text));  // last second of 2024
+    TEST_ASSERT_EQUAL_STRING("23:59 31-12-2024", text);
+    formatArrival(1735689600, 1, 0, text, sizeof(text));
+    TEST_ASSERT_EQUAL_STRING("00:00 01-01-2025", text);
+    formatArrival(4294967295LL, 1, 0, text, sizeof(text));  // largest saved value
+    TEST_ASSERT_EQUAL_STRING("06:28 07-02-2106", text);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -85,5 +119,7 @@ int main()
     RUN_TEST(test_parse_missing_zone_name_is_empty);
     RUN_TEST(test_format_clock);
     RUN_TEST(test_http_body);
+    RUN_TEST(test_format_arrival);
+    RUN_TEST(test_format_arrival_dates);
     return UNITY_END();
 }

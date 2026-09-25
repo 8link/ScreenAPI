@@ -37,6 +37,7 @@ constexpr int kRoundedBarTop = 8;
 
 constexpr uint32_t kTitleSpeedPxPerS = 40;
 constexpr uint32_t kValueSpeedPxPerS = 20;
+constexpr uint32_t kArrivalSpeedPxPerS = 20;
 constexpr uint32_t kScrollPauseMs = 1500;
 constexpr uint32_t kFrameMs = 33;
 constexpr uint32_t kPopupMs = 3000;
@@ -79,7 +80,9 @@ struct Layout {
     int barSide;      // left and right inset of the pill row
     int pillRadius;
     int countdownRadius;
-    int countdownMargin;  // inset of the countdown box from the bottom right corner
+    int countdownMargin;  // inset of the countdown and arrival boxes from the bottom corners
+    int boxTop;           // top of the countdown and arrival boxes
+    int arrivalWidth;     // widest text the arrival box shows without scrolling
     int titleLeft;        // title text area, clear of rounded corners; the rule under
     int titleWidth;       // the title spans the same width
     int ruleTop;
@@ -87,7 +90,8 @@ struct Layout {
     int barHeight;
     int titleTop;
     int valueTop;
-    int valueHeight;
+    int valueHeight;       // value area without boxes: down to the bottom edge
+    int boxedValueHeight;  // value area with boxes: ends above the box row
     int countdownHeight;
 };
 
@@ -112,6 +116,10 @@ struct Shown {
     int lineHeight;
     size_t lineCount;
     uint64_t sinceMs;
+    int valueHeight;  // layoutRows.valueHeight, or boxedValueHeight while a box shows
+    char arrival[24];
+    int arrivalWidth;
+    uint64_t arrivalSinceMs;
 };
 
 Shown shown;
@@ -277,6 +285,10 @@ void computeLayout()
     rows.countdownHeight = fonts[kSmallFont].lineHeight + 4;
     rows.countdownRadius = kRoundedCorners ? rows.countdownHeight / 2 : 3;
     rows.countdownMargin = kRoundedCorners ? diagonalClearance(rows.countdownRadius) : 0;
+    rows.boxTop = kHeight - rows.countdownHeight - 2 - rows.countdownMargin;
+    rows.boxedValueHeight = rows.boxTop - 2 - rows.valueTop;
+    // As wide as the date, so a full "HH:MM DD-MM-YYYY" scrolls from the time to the date.
+    rows.arrivalWidth = textWidth("88-88-8888", kSmallFont);
 }
 
 FontId fontFor(mq::FontSize size)
@@ -325,10 +337,19 @@ void layout(const mq::Message& message, uint64_t nowMs)
     shown.valid = true;
 }
 
+// Keeps the arrival text; a new text restarts its scrolling.
+void setArrival(const char* arrival, uint64_t nowMs)
+{
+    snprintf(shown.arrival, sizeof(shown.arrival), "%s", arrival);
+    shown.arrivalWidth = textWidth(shown.arrival, kSmallFont);
+    shown.arrivalSinceMs = nowMs;
+}
+
 bool isScrolling()
 {
     return shown.valid && (shown.titleWidth > layoutRows.titleWidth ||
-                           static_cast<int>(shown.lineCount) * shown.lineHeight > layoutRows.valueHeight);
+                           static_cast<int>(shown.lineCount) * shown.lineHeight > shown.valueHeight ||
+                           shown.arrivalWidth > layoutRows.arrivalWidth);
 }
 
 // Draws one wrapped line as runs of equal color, left to right.
@@ -355,18 +376,23 @@ void drawValue(const mq::Message& message, uint64_t elapsedMs)
 {
     const FontId font = fontFor(message.fontSize);
     const int contentHeight = static_cast<int>(shown.lineCount) * shown.lineHeight;
-    const int offset =
-        ui::scrollOffset(contentHeight, layoutRows.valueHeight, elapsedMs, kValueSpeedPxPerS, kScrollPauseMs);
+    const int bottom = layoutRows.valueTop + shown.valueHeight;
+    const int offset = ui::scrollOffset(contentHeight, shown.valueHeight, elapsedMs, kValueSpeedPxPerS, kScrollPauseMs);
 
     for (size_t i = 0; i < shown.lineCount; i++) {
         const int top = layoutRows.valueTop + static_cast<int>(i) * shown.lineHeight - offset;
         if (top + shown.lineHeight <= layoutRows.valueTop) {
             continue;
         }
-        if (top >= kHeight) {
+        if (top >= bottom) {
             break;
         }
         drawLine(lines[i], top, font);
+    }
+    // With boxes the value area ends above them, as if the screen ended there:
+    // nothing shows in the box row.
+    if (bottom < kHeight) {
+        canvas->fillRect(0, bottom, kWidth, kHeight - bottom, kBlack);
     }
 }
 
@@ -387,10 +413,31 @@ void drawCountdown(uint32_t seconds)
     const int width = textWidth(text, kSmallFont) + 2 * kCountdownPadding;
     const int radius = layoutRows.countdownRadius;
     const int x = kWidth - width - 2 - layoutRows.countdownMargin;
-    const int y = kHeight - height - 2 - layoutRows.countdownMargin;
+    const int y = layoutRows.boxTop;
     canvas->fillRoundRect(x, y, width, height, radius, kBlack);
     canvas->drawRoundRect(x, y, width, height, radius, kDarkGrey);
     drawTextMiddle(text, x + width / 2, y + height / 2, Align::Center, kSmallFont, kColorLightGrey);
+}
+
+// Box at the bottom left with the arrival time (F-015), styled like the
+// countdown. A full date is wider than the box and scrolls sideways inside it.
+void drawArrival(uint64_t elapsedMs)
+{
+    const int height = layoutRows.countdownHeight;
+    const int radius = layoutRows.countdownRadius;
+    const int innerWidth = smaller(shown.arrivalWidth, layoutRows.arrivalWidth);
+    const int width = innerWidth + 2 * kCountdownPadding;
+    const int x = 2 + layoutRows.countdownMargin;
+    const int y = layoutRows.boxTop;
+    const int innerLeft = x + kCountdownPadding;
+    const int innerRight = innerLeft + innerWidth;
+    const int offset =
+        ui::scrollOffset(shown.arrivalWidth, innerWidth, elapsedMs, kArrivalSpeedPxPerS, kScrollPauseMs);
+    drawTextMiddle(shown.arrival, innerLeft - offset, y + height / 2, Align::Left, kSmallFont, kColorLightGrey);
+    // Clip the text to the inside of the box; the box row is otherwise empty.
+    canvas->fillRect(0, y, innerLeft, height, kBlack);
+    canvas->fillRect(innerRight, y, kWidth - innerRight, height, kBlack);
+    canvas->drawRoundRect(x, y, width, height, radius, kDarkGrey);
 }
 
 void drawEmpty()
@@ -543,6 +590,9 @@ void render(const mq::MessageQueue& queue, const mq::Message* message, int32_t c
     canvas->fillScreen(kBlack);
     if (message != nullptr) {
         drawValue(*message, nowMs - shown.sinceMs);
+        if (shown.arrival[0] != '\0') {
+            drawArrival(nowMs - shown.arrivalSinceMs);
+        }
         if (countdownS >= 0) {
             drawCountdown(static_cast<uint32_t>(countdownS));
         }
@@ -653,7 +703,8 @@ void showBootScreen()
     canvas->flush();
 }
 
-void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const StatusBar& bar)
+void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const StatusBar& bar,
+            const char* arrival)
 {
     const mq::Message* message = queue.current();
     const bool relayout = message != nullptr ? !isShown(*message) : shown.valid;
@@ -664,15 +715,21 @@ void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, co
             shown.valid = false;
         }
     }
+    const bool arrivalChanged = strcmp(arrival, shown.arrival) != 0;
+    if (relayout || arrivalChanged) {
+        setArrival(arrival, nowMs);
+    }
 
     const int32_t countdownS = countdownFor(message);
+    const bool boxes = countdownS >= 0 || shown.arrival[0] != '\0';
+    shown.valueHeight = boxes ? layoutRows.boxedValueHeight : layoutRows.valueHeight;
     const bool frameDue = isScrolling() && nowMs - lastFrameMs >= kFrameMs;
     const bool barChanged = !lastBarValid || strcmp(bar.network, lastBar.network) != 0 || bar.link != lastBar.link ||
                             bar.hasBattery != lastBar.hasBattery || strcmp(bar.clock, lastBar.clock) != 0 ||
                             bar.batteryKnown != lastBar.batteryKnown || bar.externalPower != lastBar.externalPower ||
                             bar.batteryPercent != lastBar.batteryPercent;
     const bool popup = nowMs < popupUntilMs;
-    if (!queueChanged && !relayout && !frameDue && countdownS == lastCountdownS && !barChanged &&
+    if (!queueChanged && !relayout && !arrivalChanged && !frameDue && countdownS == lastCountdownS && !barChanged &&
         popup == popupShown) {
         return;
     }

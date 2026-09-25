@@ -22,9 +22,10 @@ void tearDown()
 }
 
 static void addFull(MessageQueue& queue, const char* id, const char* title, const char* value, FontSize fontSize,
-                    Color color, Kind kind, uint32_t durationS)
+                    Color color, Kind kind, uint32_t durationS, int64_t receivedAt = 0)
 {
-    TEST_ASSERT_EQUAL(AddResult::Added, queue.add(NewMessage{id, title, value, fontSize, color, kind, durationS}));
+    TEST_ASSERT_EQUAL(AddResult::Added,
+                      queue.add(NewMessage{id, title, value, fontSize, color, kind, durationS, receivedAt}));
 }
 
 // Rewrites the checksum after a test edits the encoded bytes.
@@ -38,9 +39,9 @@ static void resign(size_t size)
 
 static void test_round_trip_keeps_order_and_fields()
 {
-    addFull(*source, "a", "Title A", "{green}ok{/}", FontSize::Large, Color::Blue, Kind::Timed, 30);
+    addFull(*source, "a", "Title A", "{green}ok{/}", FontSize::Large, Color::Blue, Kind::Timed, 30, 1790000000);
     addFull(*source, "", "", "no id", FontSize::Small, Color::Red, Kind::Confirm, 0);
-    addFull(*source, "c", "Title C", "line1\nline2", FontSize::Small, Color::White, Kind::Confirm, 0);
+    addFull(*source, "c", "Title C", "line1\nline2", FontSize::Small, Color::White, Kind::Confirm, 0, 4000000000);
 
     const size_t size = encodeQueue(*source, buffer, sizeof(buffer));
     TEST_ASSERT_GREATER_THAN(0, size);
@@ -59,7 +60,10 @@ static void test_round_trip_keeps_order_and_fields()
         TEST_ASSERT_EQUAL(a.color, b.color);
         TEST_ASSERT_EQUAL(a.kind, b.kind);
         TEST_ASSERT_EQUAL_UINT32(a.durationS, b.durationS);
+        TEST_ASSERT_EQUAL_INT64(a.receivedAt, b.receivedAt);
     }
+    TEST_ASSERT_EQUAL_INT64(4000000000, target->at(0).receivedAt);
+    TEST_ASSERT_EQUAL_INT64(0, target->at(1).receivedAt);
     TEST_ASSERT_EQUAL(0, target->cursor());
 }
 
@@ -100,7 +104,7 @@ static void test_full_queue_at_maximum_lengths_fits()
         memset(id, 'a' + static_cast<char>(i % 26), kIdMaxLen);
         id[kIdMaxLen] = '\0';
         id[0] = static_cast<char>('0' + i / 26);  // keep ids unique
-        addFull(*source, id, title, value, FontSize::Small, Color::White, Kind::Timed, kMaxDurationS);
+        addFull(*source, id, title, value, FontSize::Small, Color::White, Kind::Timed, kMaxDurationS, 4294967295);
     }
     TEST_ASSERT_EQUAL(kMaxEncodedSize, encodeQueue(*source, buffer, sizeof(buffer)));
     size_t restored = 0;
@@ -133,6 +137,9 @@ static void test_decode_rejects_bad_data_and_leaves_queue_unchanged()
     buffer[2] = kCodecVersion + 1;  // unknown version
     resign(size);
     TEST_ASSERT_FALSE(decodeQueue(buffer, size, *target, restored));
+    buffer[2] = 0;
+    resign(size);
+    TEST_ASSERT_FALSE(decodeQueue(buffer, size, *target, restored));
     buffer[2] = kCodecVersion;
 
     buffer[3] = 2;  // claims more messages than present
@@ -157,6 +164,27 @@ static void test_decode_skips_messages_the_queue_rejects()
     TEST_ASSERT_EQUAL_STRING("good", target->current()->value);
 }
 
+// Files saved before 0.0.30 use version 1, without the arrival time.
+static void test_decode_version_1_without_arrival_time()
+{
+    const uint8_t v1[] = {'S', 'Q', 1, 1,                     // header, one message
+                          1, 0, 2, 0, 0, 0, 0,                // confirm, small, green, duration 0
+                          1, 'a', 1, 'T', 2, 0, 'h', 'i',    // id "a", title "T", value "hi"
+                          0, 0, 0, 0};                        // checksum, set below
+    memcpy(buffer, v1, sizeof(v1));
+    resign(sizeof(v1));
+    size_t restored = 0;
+    TEST_ASSERT_TRUE(decodeQueue(buffer, sizeof(v1), *target, restored));
+    TEST_ASSERT_EQUAL(1, restored);
+    const Message& message = target->at(0);
+    TEST_ASSERT_EQUAL_STRING("a", message.id);
+    TEST_ASSERT_EQUAL_STRING("T", message.title);
+    TEST_ASSERT_EQUAL_STRING("hi", message.value);
+    TEST_ASSERT_EQUAL(Color::Green, message.color);
+    TEST_ASSERT_EQUAL(Kind::Confirm, message.kind);
+    TEST_ASSERT_EQUAL_INT64(0, message.receivedAt);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -167,5 +195,6 @@ int main()
     RUN_TEST(test_encode_fails_when_capacity_too_small);
     RUN_TEST(test_decode_rejects_bad_data_and_leaves_queue_unchanged);
     RUN_TEST(test_decode_skips_messages_the_queue_rejects);
+    RUN_TEST(test_decode_version_1_without_arrival_time);
     return UNITY_END();
 }

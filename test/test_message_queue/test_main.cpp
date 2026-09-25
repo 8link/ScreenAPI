@@ -45,7 +45,8 @@ static void test_starts_empty()
 
 static void test_add_copies_fields()
 {
-    NewMessage input{"build", "Claude Code", "Running tests", FontSize::Large, Color::Green, Kind::Timed, 5};
+    NewMessage input{"build", "Claude Code", "Running tests", FontSize::Large, Color::Green, Kind::Timed, 5,
+                     1790000000};
     TEST_ASSERT_EQUAL(AddResult::Added, queue->add(input));
 
     const Message* message = queue->current();
@@ -58,6 +59,7 @@ static void test_add_copies_fields()
     TEST_ASSERT_EQUAL(Kind::Timed, message->kind);
     TEST_ASSERT_EQUAL_UINT32(5, message->durationS);
     TEST_ASSERT_EQUAL_UINT32(5000, message->remainingMs);
+    TEST_ASSERT_EQUAL_INT64(1790000000, message->receivedAt);
 }
 
 static void test_null_id_and_title_are_empty()
@@ -66,6 +68,7 @@ static void test_null_id_and_title_are_empty()
     TEST_ASSERT_EQUAL(AddResult::Added, queue->add(input));
     TEST_ASSERT_EQUAL_STRING("", queue->current()->id);
     TEST_ASSERT_EQUAL_STRING("", queue->current()->title);
+    TEST_ASSERT_EQUAL_INT64(0, queue->current()->receivedAt);  // arrival time unknown
 }
 
 static void test_rejects_invalid_input()

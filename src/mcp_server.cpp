@@ -6,6 +6,7 @@
 #include <mcp_handler.h>
 
 #include "board.h"
+#include "clock.h"
 
 namespace mcp_server {
 
@@ -73,7 +74,7 @@ void start()
 
 void begin(mq::MessageQueue& queue)
 {
-    static mcp::Handler instance(queue, FW_VERSION);
+    static mcp::Handler instance(queue, FW_VERSION, clock_sync::utcNow);
     handler = &instance;
     const char* headers[] = {"Origin"};
     server.collectHeaders(headers, 1);

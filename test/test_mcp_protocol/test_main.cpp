@@ -12,11 +12,18 @@ using namespace mcp;
 static mq::MessageQueue* queue;
 static Handler* handler;
 static JsonDocument reply;
+static int64_t fakeNow = 0;
+
+static int64_t fakeClock()
+{
+    return fakeNow;
+}
 
 void setUp()
 {
     queue = new mq::MessageQueue();
-    handler = new Handler(*queue, "9.9.9");
+    fakeNow = 0;
+    handler = new Handler(*queue, "9.9.9", fakeClock);
 }
 
 void tearDown()
@@ -172,6 +179,25 @@ static void test_show_message_replaces_by_id()
     TEST_ASSERT_EQUAL_STRING("two", queue->current()->value);
 }
 
+static void test_show_message_stamps_arrival_time()
+{
+    callTool("show_message", R"({"value":"before NTP"})");
+    TEST_ASSERT_EQUAL_INT64(0, queue->current()->receivedAt);
+    fakeNow = 1790289000;
+    callTool("show_message", R"({"id":"status","value":"one"})");
+    TEST_ASSERT_EQUAL_INT64(1790289000, queue->current()->receivedAt);
+    fakeNow += 60;
+    callTool("show_message", R"({"id":"status","value":"two"})");
+    TEST_ASSERT_EQUAL_INT64(1790289060, queue->current()->receivedAt);  // a replacement is a new arrival
+
+    mq::MessageQueue other;
+    Handler noClock(other, "9.9.9");
+    const std::string body =
+        R"({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"show_message","arguments":{"value":"v"}}})";
+    noClock.handlePost(body.c_str(), body.size());
+    TEST_ASSERT_EQUAL_INT64(0, other.current()->receivedAt);
+}
+
 static void test_show_message_validation_errors()
 {
     const char* const cases[][2] = {
@@ -271,6 +297,7 @@ int main()
     RUN_TEST(test_show_message_all_fields);
     RUN_TEST(test_duration_alone_means_timed);
     RUN_TEST(test_show_message_replaces_by_id);
+    RUN_TEST(test_show_message_stamps_arrival_time);
     RUN_TEST(test_show_message_validation_errors);
     RUN_TEST(test_show_message_length_limit_counts_after_cleanup);
     RUN_TEST(test_show_message_reports_replaced_characters);

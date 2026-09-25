@@ -6,6 +6,7 @@
 
 #include <message_queue.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include <string>
 
@@ -22,9 +23,17 @@ struct Response {
     std::string summary;          // one line for the serial log
 };
 
+// Returns the current UTC time in seconds, or 0 while it is not known.
+using WallClock = int64_t (*)();
+
 class Handler {
 public:
-    Handler(mq::MessageQueue& queue, const char* serverVersion) : queue_(queue), serverVersion_(serverVersion) {}
+    // wallClock stamps each show_message with its arrival time; without one,
+    // the arrival time is unknown.
+    Handler(mq::MessageQueue& queue, const char* serverVersion, WallClock wallClock = nullptr)
+        : queue_(queue), serverVersion_(serverVersion), wallClock_(wallClock)
+    {
+    }
 
     // Handles one JSON-RPC message POSTed to the MCP endpoint.
     Response handlePost(const char* body, size_t length);
@@ -32,6 +41,7 @@ public:
 private:
     mq::MessageQueue& queue_;
     const char* serverVersion_;
+    WallClock wallClock_;
 };
 
 }  // namespace mcp

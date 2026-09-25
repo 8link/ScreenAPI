@@ -93,6 +93,7 @@ struct Entry {
     uint8_t fontSize;
     uint8_t color;
     uint32_t durationS;
+    uint32_t receivedAt;
     char id[kIdMaxLen + 1];
     char title[kTitleMaxLen + 1];
     char value[kValueMaxLen + 1];
@@ -110,12 +111,13 @@ bool readText(Reader& reader, size_t length, char* dest, size_t maxLength)
     return true;
 }
 
-bool readEntry(Reader& reader, Entry& entry)
+bool readEntry(Reader& reader, uint8_t version, Entry& entry)
 {
     entry.kind = reader.u8();
     entry.fontSize = reader.u8();
     entry.color = reader.u8();
     entry.durationS = reader.u32();
+    entry.receivedAt = version >= 2 ? reader.u32() : 0;
     return readText(reader, reader.u8(), entry.id, kIdMaxLen) &&
            readText(reader, reader.u8(), entry.title, kTitleMaxLen) &&
            readText(reader, reader.u16(), entry.value, kValueMaxLen) && !reader.error();
@@ -146,6 +148,8 @@ size_t encodeQueue(const MessageQueue& queue, uint8_t* out, size_t capacity)
         writer.u8(static_cast<uint8_t>(message.fontSize));
         writer.u8(static_cast<uint8_t>(message.color));
         writer.u32(message.durationS);
+        // 32 bits hold UTC seconds until 2106.
+        writer.u32(message.receivedAt > 0 ? static_cast<uint32_t>(message.receivedAt) : 0);
         const size_t idLength = strlen(message.id);
         const size_t titleLength = strlen(message.title);
         const size_t valueLength = strlen(message.value);
@@ -175,7 +179,11 @@ bool decodeQueue(const uint8_t* data, size_t size, MessageQueue& queue, size_t& 
     }
 
     Reader reader(data, size - kChecksumSize);
-    if (reader.u8() != 'S' || reader.u8() != 'Q' || reader.u8() != kCodecVersion) {
+    if (reader.u8() != 'S' || reader.u8() != 'Q') {
+        return false;
+    }
+    const uint8_t version = reader.u8();
+    if (version < 1 || version > kCodecVersion) {
         return false;
     }
     const uint8_t count = reader.u8();
@@ -189,7 +197,7 @@ bool decodeQueue(const uint8_t* data, size_t size, MessageQueue& queue, size_t& 
     Entry entry;
     for (size_t i = 0; i < count; i++) {
         offsets[i] = reader.position();
-        if (!readEntry(reader, entry)) {
+        if (!readEntry(reader, version, entry)) {
             return false;
         }
     }
@@ -201,14 +209,15 @@ bool decodeQueue(const uint8_t* data, size_t size, MessageQueue& queue, size_t& 
     queue.clear();
     for (size_t i = count; i > 0; i--) {
         Reader entryReader(data + offsets[i - 1], size - kChecksumSize - offsets[i - 1]);
-        readEntry(entryReader, entry);
+        readEntry(entryReader, version, entry);
         const NewMessage input{entry.id,
                                entry.title,
                                entry.value,
                                static_cast<FontSize>(entry.fontSize),
                                static_cast<Color>(entry.color),
                                static_cast<Kind>(entry.kind),
-                               entry.durationS};
+                               entry.durationS,
+                               static_cast<int64_t>(entry.receivedAt)};
         if (queue.add(input) == AddResult::Added) {
             restored++;
         }

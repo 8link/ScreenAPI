@@ -108,4 +108,19 @@ void text(char* out, size_t size)
     clk::formatClock(static_cast<int64_t>(now), offsetSeconds, out, size);
 }
 
+int64_t utcNow()
+{
+    const time_t now = time(nullptr);
+    return now < kValidTime ? 0 : static_cast<int64_t>(now);
+}
+
+void arrivalText(int64_t receivedUtc, char* out, size_t size)
+{
+    if (receivedUtc == 0 || !offsetKnown) {
+        snprintf(out, size, "%s", "");
+        return;
+    }
+    clk::formatArrival(receivedUtc, utcNow(), offsetSeconds, out, size);
+}
+
 }  // namespace clock_sync

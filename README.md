@@ -65,7 +65,7 @@ flowchart LR
 | **Messages** | Title plus a value of up to 512 characters, two font sizes, four colors, and inline color tags: `Build {green}passed{/}, 2 {red}warnings{/}`. Non-ASCII typography (dashes, quotes, ellipsis) is converted for the fonts. |
 | **Lifecycle** | *Timed* messages count down only while they are on screen, with the time left in a small box. *Confirm* messages stay until deleted. A message with the same `id` replaces the old one, so a status update never fills the queue. |
 | **Queue** | 30 messages, newest first, saved to flash and restored after a reboot. When full, new messages are dropped, a popup says so, and the sender is told. |
-| **Screen** | Top bar with connection status, IP address, queue position, battery, and clock (NTP, timezone from your IP). Long titles scroll sideways, long text scrolls down. Flicker-free, full-frame buffered drawing. |
+| **Screen** | Top bar with connection status, IP address, queue position, battery, and clock (NTP, timezone from your IP). Each message shows when it arrived in a box at the bottom left: the time for today, time and date for older ones. Long titles scroll sideways, long text scrolls down. Flicker-free, full-frame buffered drawing. |
 | **Sound** | A short two-note chime for every message sent to the display, on boards with a speaker (Waveshare AMOLED, M5StickS3). |
 | **Screen saver** | After a minute with no messages the screen turns off, and every 30 s it shows a 5 s animation of particles with fading trails. Any press or new message wakes it. The CPU runs at 160 MHz, 80 MHz while the screen is off. |
 | **Controls** | Delete the shown message, hold to clear all, show the next message; hold both inputs for 5 s to reset Wi-Fi. |

@@ -65,6 +65,7 @@ AddResult MessageQueue::add(const NewMessage& input)
     message.kind = input.kind;
     message.durationS = input.kind == Kind::Timed ? input.durationS : 0;
     message.remainingMs = input.kind == Kind::Timed ? input.durationS * 1000 : 0;
+    message.receivedAt = input.receivedAt > 0 ? input.receivedAt : 0;
     count_++;
     cursor_ = 0;  // newest first, jump to it
 

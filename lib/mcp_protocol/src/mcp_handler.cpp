@@ -188,7 +188,7 @@ std::string readEnum(JsonObjectConst args, const char* key, const char* const* n
     return text + ".";
 }
 
-ToolOutcome showMessage(mq::MessageQueue& queue, JsonObjectConst args)
+ToolOutcome showMessage(mq::MessageQueue& queue, JsonObjectConst args, int64_t receivedAt)
 {
     static char id[mq::kIdMaxLen + 1];
     static char title[mq::kTitleMaxLen + 1];
@@ -240,7 +240,8 @@ ToolOutcome showMessage(mq::MessageQueue& queue, JsonObjectConst args)
                                static_cast<mq::FontSize>(font),
                                static_cast<mq::Color>(color),
                                timed ? mq::Kind::Timed : mq::Kind::Confirm,
-                               timed ? durationS : 0};
+                               timed ? durationS : 0,
+                               receivedAt};
     const mq::AddResult result = queue.add(input);
 
     ToolOutcome outcome;
@@ -274,7 +275,7 @@ ToolOutcome showMessage(mq::MessageQueue& queue, JsonObjectConst args)
     return outcome;
 }
 
-Response toolCall(mq::MessageQueue& queue, JsonVariantConst id, JsonObjectConst params)
+Response toolCall(mq::MessageQueue& queue, JsonVariantConst id, JsonObjectConst params, WallClock wallClock)
 {
     const char* name = params["name"];
     if (name == nullptr) {
@@ -282,7 +283,7 @@ Response toolCall(mq::MessageQueue& queue, JsonVariantConst id, JsonObjectConst 
     }
     ToolOutcome outcome;
     if (strcmp(name, "show_message") == 0) {
-        outcome = showMessage(queue, params["arguments"]);
+        outcome = showMessage(queue, params["arguments"], wallClock != nullptr ? wallClock() : 0);
     } else if (strcmp(name, "queue_status") == 0) {
         outcome.text = queueCountText(queue);
     } else {
@@ -403,7 +404,7 @@ Response Handler::handlePost(const char* body, size_t length)
         return toolsList(id);
     }
     if (strcmp(method, "tools/call") == 0) {
-        return toolCall(queue_, id, params);
+        return toolCall(queue_, id, params, wallClock_);
     }
     return jsonRpcError(id, -32601, (std::string("Method not found: ") + method).c_str());
 }

@@ -156,8 +156,8 @@ bool addIpMessage(const char* ip)
     char value[160];
     snprintf(value, sizeof(value), "{green}Connected{/} to %s\nIP %s\nMCP http://%s.local/mcp",
              WiFi.SSID().c_str(), ip, board::kHostname);
-    const mq::NewMessage message{"ip", "Network", value, mq::FontSize::Small, mq::Color::White, mq::Kind::Timed,
-                                 kIpMessageS};
+    const mq::NewMessage message{"ip", "Network", value, mq::FontSize::Small, mq::Color::White,
+                                 mq::Kind::Timed, kIpMessageS, clock_sync::utcNow()};
     const mq::AddResult result = queue.add(message);
     if (result == mq::AddResult::Full) {
         Serial.println("IP message dropped: queue full");
@@ -438,7 +438,11 @@ void loop()
         redraw |= coverShown;
         coverShown = false;
         readBatteryIfDue(now);
-        screen::update(queue, now, redraw, statusBar());
+        char arrival[24] = "";
+        if (!queue.empty()) {
+            clock_sync::arrivalText(queue.current()->receivedAt, arrival, sizeof(arrival));
+        }
+        screen::update(queue, now, redraw, statusBar(), arrival);
     }
     delay(5);
 }

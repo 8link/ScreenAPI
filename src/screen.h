@@ -1,4 +1,4 @@
-// Display rendering: boot screen, top bar, message screen (PROJECT.md F-005, F-007, F-010).
+// Display rendering: boot screen, top bar, message screen (PROJECT.md F-005, F-007, F-010, F-015).
 #pragma once
 
 #include <message_queue.h>
@@ -34,9 +34,12 @@ bool begin();
 void showBootScreen();
 
 // Message screen. Redraws when the queue changed, text is scrolling, the
-// countdown changed, or the top bar changed. Call every loop while the
-// message screen is visible; pass queueChanged = true when returning to it.
-void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const StatusBar& bar);
+// countdown or arrival text changed, or the top bar changed. Call every loop
+// while the message screen is visible; pass queueChanged = true when returning
+// to it. arrival is the shown message's arrival time for the box at the bottom
+// left (F-015), or empty for no box.
+void update(const mq::MessageQueue& queue, uint64_t nowMs, bool queueChanged, const StatusBar& bar,
+            const char* arrival);
 
 // Wi-Fi setup screen (F-002): QR code for the ESP BLE Provisioning app, the
 // device name, the proof-of-possession code, and a status line.

@@ -14,4 +14,11 @@ void poll(uint64_t nowMs, bool connected);
 // Writes "HH:MM", or "--:--" until both the time and the offset are known.
 void text(char* out, size_t size);
 
+// Current UTC time in seconds, or 0 until NTP has synced.
+int64_t utcNow();
+
+// Writes a message's arrival time: "HH:MM" today, "HH:MM DD-MM-YYYY" on another
+// day (F-015). Empty when receivedUtc is 0 or the offset is not known yet.
+void arrivalText(int64_t receivedUtc, char* out, size_t size);
+
 }  // namespace clock_sync

@@ -29,6 +29,7 @@ struct NewMessage {
     Color color;
     Kind kind;
     uint32_t durationS;  // Timed only: 1..kMaxDurationS
+    int64_t receivedAt;  // arrival time, UTC seconds; 0 when the time was not known
 };
 
 struct Message {
@@ -40,6 +41,7 @@ struct Message {
     Kind kind;
     uint32_t durationS;
     uint32_t remainingMs;  // Timed only; counts down only while the message is shown
+    int64_t receivedAt;    // arrival time, UTC seconds; 0 when the time was not known
 };
 
 // Index 0 is the newest message. The cursor is the message on screen.

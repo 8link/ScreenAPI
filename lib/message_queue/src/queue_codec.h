@@ -4,9 +4,11 @@
 // Layout, little-endian:
 //   'S' 'Q' version(1)  count(1)
 //   per message, newest first:
-//     kind(1) fontSize(1) color(1) durationS(4)
+//     kind(1) fontSize(1) color(1) durationS(4) receivedAt(4)
 //     idLength(1) id  titleLength(1) title  valueLength(2) value
 //   checksum(4): FNV-1a over all bytes before it
+// receivedAt is UTC seconds, 0 for unknown; version 1 has no receivedAt and
+// still decodes, with the arrival time unknown.
 // Remaining time is not stored: timed messages restart their full duration (D-017).
 #pragma once
 
@@ -17,9 +19,9 @@
 
 namespace mq {
 
-constexpr uint8_t kCodecVersion = 1;
+constexpr uint8_t kCodecVersion = 2;
 constexpr size_t kMaxEncodedSize =
-    4 + kCapacity * (3 + 4 + 1 + kIdMaxLen + 1 + kTitleMaxLen + 2 + kValueMaxLen) + 4;
+    4 + kCapacity * (3 + 4 + 4 + 1 + kIdMaxLen + 1 + kTitleMaxLen + 2 + kValueMaxLen) + 4;
 
 uint32_t fnv1a(const uint8_t* data, size_t size);
 

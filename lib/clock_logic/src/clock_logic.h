@@ -19,4 +19,9 @@ bool httpBody(const char* response, size_t length, const char*& body, size_t& bo
 // Writes local time as "HH:MM" (24-hour) for the given UTC time and offset.
 void formatClock(int64_t utcSeconds, int32_t offsetSeconds, char* out, size_t size);
 
+// Writes a message's arrival time in local time: "HH:MM" when it is on the same
+// local day as nowUtc, otherwise "HH:MM DD-MM-YYYY". A nowUtc of 0 (time
+// unknown) always gives the full form. Both times use the current offset.
+void formatArrival(int64_t receivedUtc, int64_t nowUtc, int32_t offsetSeconds, char* out, size_t size);
+
 }  // namespace clk
