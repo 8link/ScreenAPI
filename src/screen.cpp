@@ -918,7 +918,8 @@ void wake()
     lastBarValid = false;
 }
 
-void drawParticles(const ui::ParticleField& field, uint8_t level)
+void drawParticles(const ui::ParticleField& field, uint8_t level, const char* clock, const char* date,
+                   uint8_t textLevel)
 {
     // Sizes from the shorter screen side: 1 px trails and a 3 px head at 135 px,
     // 2 px trails and a 7 px head on the AMOLED's 368 px.
@@ -946,6 +947,16 @@ void drawParticles(const ui::ParticleField& field, uint8_t level)
             }
         }
         canvas->fillCircle(pixel(p.trail[0].x), pixel(p.trail[0].y), kHeadRadius, particleColor(p.hue, level));
+    }
+    if (textLevel > 0) {
+        // In the white particle hue, so the text adds no palette colors.
+        constexpr uint8_t kWhiteHue = ui::kParticleHues - 1;
+        const uint16_t color = particleColor(kWhiteHue, textLevel);
+        const TextLine textLines[] = {
+            {clock, kLargeFont, color, 0},
+            {date, kSmallFont, color, 2},
+        };
+        drawBlock(textLines, 2, kWidth / 2, (kHeight - blockHeight(textLines, 2)) / 2, Align::Center);
     }
     canvas->flush();
     lastBarValid = false;

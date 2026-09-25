@@ -14,6 +14,10 @@ void poll(uint64_t nowMs, bool connected);
 // Writes "HH:MM", or "--:--" until both the time and the offset are known.
 void text(char* out, size_t size);
 
+// Writes today's local date as "DD-MM-YYYY", or an empty string until both the
+// time and the offset are known.
+void dateText(char* out, size_t size);
+
 // Current UTC time in seconds, or 0 until NTP has synced.
 int64_t utcNow();
 

@@ -84,6 +84,12 @@ void formatClock(int64_t utcSeconds, int32_t offsetSeconds, char* out, size_t si
     snprintf(out, size, "%02d:%02d", static_cast<int>(secondsOfDay / 3600), static_cast<int>(secondsOfDay / 60 % 60));
 }
 
+void formatDate(int64_t utcSeconds, int32_t offsetSeconds, char* out, size_t size)
+{
+    const Date date = dateFromDays(floorDiv(utcSeconds + offsetSeconds, kSecondsPerDay));
+    snprintf(out, size, "%02u-%02u-%04lld", date.day, date.month, static_cast<long long>(date.year));
+}
+
 void formatArrival(int64_t receivedUtc, int64_t nowUtc, int32_t offsetSeconds, char* out, size_t size)
 {
     const int64_t local = receivedUtc + offsetSeconds;
@@ -95,9 +101,9 @@ void formatArrival(int64_t receivedUtc, int64_t nowUtc, int32_t offsetSeconds, c
         snprintf(out, size, "%02d:%02d", hour, minute);
         return;
     }
-    const Date date = dateFromDays(day);
-    snprintf(out, size, "%02d:%02d %02u-%02u-%04lld", hour, minute, date.day, date.month,
-             static_cast<long long>(date.year));
+    char date[12];
+    formatDate(receivedUtc, offsetSeconds, date, sizeof(date));
+    snprintf(out, size, "%02d:%02d %s", hour, minute, date);
 }
 
 }  // namespace clk

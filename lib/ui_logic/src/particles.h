@@ -35,6 +35,13 @@ public:
     // Moves every particle by dtS seconds; particles bounce off the edges.
     void step(float dtS);
 
+    // While gathering, every particle turns toward (x, y) instead of drifting
+    // at random, far ones faster, so the swarm closes in and circles that point.
+    void gather(float x, float y);
+    // Ends gathering: every particle heads straight away from (x, y) at
+    // `boost` times its speed, easing back to its own speed within about a second.
+    void burst(float x, float y, float boost);
+
     int count() const { return count_; }
     const Particle& particle(int index) const { return particles_[index]; }
 
@@ -44,6 +51,9 @@ private:
 
     Particle particles_[kMaxParticles];
     int count_ = 0;
+    bool gathering_ = false;
+    Point center_{0.0f, 0.0f};
+    float boost_ = 1.0f;  // speed factor after a burst, decays to 1
     int width_ = 0;
     int height_ = 0;
     uint32_t state_ = 1;

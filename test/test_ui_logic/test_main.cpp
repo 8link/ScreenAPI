@@ -3,6 +3,7 @@
 #include <button_tracker.h>
 #include <countdown.h>
 #include <markup.h>
+#include <math.h>
 #include <particles.h>
 #include <screen_saver.h>
 #include <scroll_offset.h>
@@ -411,6 +412,60 @@ static void test_particles_trail_follows_the_head()
     TEST_ASSERT_EQUAL_FLOAT(first.y, field.particle(0).trail[1].y);
 }
 
+static float distance(const Point& a, float x, float y)
+{
+    return sqrtf((a.x - x) * (a.x - x) + (a.y - y) * (a.y - y));
+}
+
+static void test_particles_gather_around_a_point()
+{
+    for (uint32_t seed = 1; seed <= 20; ++seed) {
+        for (int size = 0; size < 2; ++size) {
+            const int width = size == 0 ? 240 : 368;
+            const int height = size == 0 ? 135 : 448;
+            const float side = static_cast<float>(width < height ? width : height);
+            ParticleField field;
+            field.start(width, height, seed);
+            field.gather(width / 2.0f, height / 2.0f);
+            for (int frame = 0; frame < 30; ++frame) {  // 1.2 s at 25 frames per second
+                field.step(0.04f);
+            }
+            for (int i = 0; i < field.count(); ++i) {
+                TEST_ASSERT_TRUE(distance(field.particle(i).trail[0], width / 2.0f, height / 2.0f) < side * 0.2f);
+            }
+        }
+    }
+}
+
+static void test_particles_burst_away_then_slow_down()
+{
+    ParticleField field;
+    field.start(368, 448, 5);
+    field.gather(184.0f, 224.0f);
+    for (int frame = 0; frame < 30; ++frame) {
+        field.step(0.04f);
+    }
+    field.burst(184.0f, 224.0f, 3.0f);
+    float before[kMaxParticles];
+    for (int i = 0; i < field.count(); ++i) {
+        before[i] = distance(field.particle(i).trail[0], 184.0f, 224.0f);
+    }
+    field.step(0.04f);
+    for (int i = 0; i < field.count(); ++i) {
+        const Particle& p = field.particle(i);
+        TEST_ASSERT_TRUE(distance(p.trail[0], 184.0f, 224.0f) > before[i]);
+        // At least twice the fastest normal speed (0.5 x 368 px/s) in this first step.
+        TEST_ASSERT_TRUE(distance(p.trail[0], p.trail[1].x, p.trail[1].y) > 2.0f * p.speed * 0.04f);
+    }
+    for (int frame = 0; frame < 50; ++frame) {  // 2 s: back to normal speed
+        field.step(0.04f);
+    }
+    for (int i = 0; i < field.count(); ++i) {
+        const Particle& p = field.particle(i);
+        TEST_ASSERT_TRUE(distance(p.trail[0], p.trail[1].x, p.trail[1].y) <= 1.01f * p.speed * 0.04f);
+    }
+}
+
 static void test_fade_level_ramps_in_and_out()
 {
     TEST_ASSERT_EQUAL(0, fadeLevel(0, 5000, 600, 7));
@@ -508,6 +563,8 @@ int main()
     RUN_TEST(test_particles_same_seed_same_start);
     RUN_TEST(test_particles_stay_on_screen_and_trails_are_capped);
     RUN_TEST(test_particles_trail_follows_the_head);
+    RUN_TEST(test_particles_gather_around_a_point);
+    RUN_TEST(test_particles_burst_away_then_slow_down);
     RUN_TEST(test_fade_level_ramps_in_and_out);
     RUN_TEST(test_saver_goes_dark_after_idle_time);
     RUN_TEST(test_saver_idle_time_restarts_on_content_or_press);

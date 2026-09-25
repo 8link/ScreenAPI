@@ -33,6 +33,17 @@ constexpr uint32_t kSaverPeriodMs = 30000;
 constexpr uint32_t kSaverAnimationMs = 5000;
 constexpr uint32_t kSaverFadeMs = 600;
 constexpr uint32_t kSaverFrameMs = 40;
+// Clock in the animation, times from its start: the particles gather at the
+// center, the clock and date fade in, hold, and the particles burst outward
+// as the text fades out.
+constexpr uint32_t kSaverGatherMs = 800;
+constexpr uint32_t kSaverTextMs = 1600;
+constexpr uint32_t kSaverTextLengthMs = 2000;  // fade in, hold 1.2 s, fade out
+constexpr uint32_t kSaverTextRampMs = 400;
+constexpr uint32_t kSaverBurstMs = kSaverTextMs + kSaverTextLengthMs - kSaverTextRampMs;
+constexpr float kSaverBurstBoost = 3.0f;
+static_assert(kSaverTextMs + kSaverTextLengthMs <= kSaverAnimationMs - kSaverFadeMs,
+              "the clock must be gone before the animation fades out");
 // CPU clock (F-014): 80 MHz is the lowest at which Wi-Fi runs.
 constexpr uint32_t kCpuMhz = 160;
 constexpr uint32_t kSaverCpuMhz = 80;
@@ -58,6 +69,11 @@ ui::SaverPhase saverPhase = ui::SaverPhase::Awake;
 ui::ParticleField particles;
 bool swallowPress = false;  // a press that woke the screen does nothing else
 uint64_t lastParticleFrameMs = 0;
+// Clock and date of the current animation; empty while the time is not known.
+char saverClock[8] = "";
+char saverDate[12] = "";
+bool saverGathering = false;
+bool saverBurst = false;
 uint32_t particleFrames = 0;
 uint64_t particleRenderUs = 0;
 
@@ -298,6 +314,13 @@ bool enterSaverPhase(ui::SaverPhase phase, uint64_t now)
         return false;
     case ui::SaverPhase::Animating:
         particles.start(board::kScreenWidth, board::kScreenHeight, esp_random());
+        clock_sync::text(saverClock, sizeof(saverClock));
+        clock_sync::dateText(saverDate, sizeof(saverDate));
+        if (saverDate[0] == '\0') {
+            saverClock[0] = '\0';  // "--:--": no clock, particles only
+        }
+        saverGathering = false;
+        saverBurst = false;
         screen::wake();
         lastParticleFrameMs = now;
         particleFrames = 0;
@@ -307,17 +330,43 @@ bool enterSaverPhase(ui::SaverPhase phase, uint64_t now)
     return false;
 }
 
+// Gathers the particles for the clock and bursts them away again; returns the
+// text brightness for this frame.
+uint8_t runClockShow(uint32_t elapsedMs, uint8_t level)
+{
+    if (saverClock[0] == '\0') {
+        return 0;
+    }
+    constexpr float kCenterX = board::kScreenWidth / 2.0f;
+    constexpr float kCenterY = board::kScreenHeight / 2.0f;
+    if (!saverGathering && elapsedMs >= kSaverGatherMs) {
+        saverGathering = true;
+        particles.gather(kCenterX, kCenterY);
+    }
+    if (!saverBurst && elapsedMs >= kSaverBurstMs) {
+        saverBurst = true;
+        particles.burst(kCenterX, kCenterY, kSaverBurstBoost);
+    }
+    if (elapsedMs < kSaverTextMs) {
+        return 0;
+    }
+    const uint8_t text = ui::fadeLevel(elapsedMs - kSaverTextMs, kSaverTextLengthMs, kSaverTextRampMs,
+                                       screen::kParticleLevels - 1);
+    return text < level ? text : level;
+}
+
 void runAnimation(uint64_t now)
 {
     if (now - lastParticleFrameMs < kSaverFrameMs) {
         return;
     }
+    const uint32_t elapsedMs = static_cast<uint32_t>(now - saver.animationStartMs());
+    const uint8_t level = ui::fadeLevel(elapsedMs, kSaverAnimationMs, kSaverFadeMs, screen::kParticleLevels - 1);
+    const uint8_t textLevel = runClockShow(elapsedMs, level);
     particles.step(static_cast<float>(now - lastParticleFrameMs) / 1000.0f);
     lastParticleFrameMs = now;
-    const uint8_t level = ui::fadeLevel(static_cast<uint32_t>(now - saver.animationStartMs()), kSaverAnimationMs,
-                                        kSaverFadeMs, screen::kParticleLevels - 1);
     const int64_t startUs = esp_timer_get_time();
-    screen::drawParticles(particles, level);
+    screen::drawParticles(particles, level, saverClock, saverDate, textLevel);
     particleRenderUs += static_cast<uint64_t>(esp_timer_get_time() - startUs);
     ++particleFrames;
 }

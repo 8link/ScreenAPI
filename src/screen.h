@@ -77,7 +77,10 @@ void wake();
 constexpr uint8_t kParticleLevels = 8;
 
 // One animation frame: every particle's trail fades from its head, all at the
-// given brightness level. The panel must be awake.
-void drawParticles(const ui::ParticleField& field, uint8_t level);
+// given brightness level. Over the particles, the clock (large font) and the
+// date (small font) centered on the screen at textLevel; 0 draws no text. The
+// panel must be awake.
+void drawParticles(const ui::ParticleField& field, uint8_t level, const char* clock, const char* date,
+                   uint8_t textLevel);
 
 }  // namespace screen

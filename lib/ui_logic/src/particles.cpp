@@ -15,6 +15,9 @@ constexpr float kMaxTurn = 2.5f;     // rad/s
 constexpr float kTurnDrift = 6.0f;   // rad/s^2, random walk of the turn rate
 constexpr float kMinSpeed = 0.25f;   // screen's shorter side per second
 constexpr float kMaxSpeed = 0.5f;
+constexpr float kGatherTurn = 6.0f;   // rad/s toward the gather point: circles of 6 to 11 px at 240 x 135
+constexpr float kGatherTimeS = 0.4f;  // far particles rush in: speed at least distance / this
+constexpr float kBoostDecayS = 0.35f;  // time constant of the burst speed-up
 
 float clampTo(float value, float low, float high)
 {
@@ -42,6 +45,8 @@ void ParticleField::start(int width, int height, uint32_t seed)
     width_ = width;
     height_ = height;
     state_ = seed != 0 ? seed : 1;  // xorshift never leaves 0
+    gathering_ = false;
+    boost_ = 1.0f;
     const int area = width * height;
     count_ = area / kAreaPerParticle;
     count_ = count_ < kMinParticles ? kMinParticles : count_ > kMaxCount ? kMaxCount : count_;
@@ -64,10 +69,20 @@ void ParticleField::step(float dtS)
     const float maxY = static_cast<float>(height_ - 1);
     for (int i = 0; i < count_; ++i) {
         Particle& p = particles_[i];
-        p.turn = clampTo(p.turn + randomRange(-kTurnDrift, kTurnDrift) * dtS, -kMaxTurn, kMaxTurn);
-        p.heading += p.turn * dtS;
-        float vx = cosf(p.heading) * p.speed;
-        float vy = sinf(p.heading) * p.speed;
+        float speed = p.speed * boost_;
+        if (gathering_) {
+            const float dx = center_.x - p.trail[0].x;
+            const float dy = center_.y - p.trail[0].y;
+            const float diff = remainderf(atan2f(dy, dx) - p.heading, 2.0f * kPi);
+            p.heading += clampTo(diff, -kGatherTurn * dtS, kGatherTurn * dtS);
+            const float rush = sqrtf(dx * dx + dy * dy) / kGatherTimeS;
+            speed = rush > speed ? rush : speed;
+        } else {
+            p.turn = clampTo(p.turn + randomRange(-kTurnDrift, kTurnDrift) * dtS, -kMaxTurn, kMaxTurn);
+            p.heading += p.turn * dtS;
+        }
+        float vx = cosf(p.heading) * speed;
+        float vy = sinf(p.heading) * speed;
         Point next{p.trail[0].x + vx * dtS, p.trail[0].y + vy * dtS};
         if (next.x < 0.0f || next.x > maxX) {
             vx = -vx;
@@ -84,6 +99,28 @@ void ParticleField::step(float dtS)
         }
         p.trail[0] = next;
         p.trailCount = kept + 1;
+    }
+    boost_ = 1.0f + (boost_ - 1.0f) * expf(-dtS / kBoostDecayS);
+}
+
+void ParticleField::gather(float x, float y)
+{
+    gathering_ = true;
+    center_ = Point{x, y};
+}
+
+void ParticleField::burst(float x, float y, float boost)
+{
+    gathering_ = false;
+    boost_ = boost;
+    for (int i = 0; i < count_; ++i) {
+        Particle& p = particles_[i];
+        const float dx = p.trail[0].x - x;
+        const float dy = p.trail[0].y - y;
+        if (dx != 0.0f || dy != 0.0f) {
+            p.heading = atan2f(dy, dx);
+        }
+        p.turn = 0.0f;
     }
 }
 

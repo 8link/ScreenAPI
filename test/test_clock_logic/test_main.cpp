@@ -111,6 +111,15 @@ static void test_format_arrival_dates()
     TEST_ASSERT_EQUAL_STRING("06:28 07-02-2106", text);
 }
 
+static void test_format_date()
+{
+    char text[12];
+    formatDate(1790289000, 0, text, sizeof(text));  // 2026-09-24 22:30 UTC
+    TEST_ASSERT_EQUAL_STRING("24-09-2026", text);
+    formatDate(1790289000, 7200, text, sizeof(text));  // 00:30 on the 25th locally
+    TEST_ASSERT_EQUAL_STRING("25-09-2026", text);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -121,5 +130,6 @@ int main()
     RUN_TEST(test_http_body);
     RUN_TEST(test_format_arrival);
     RUN_TEST(test_format_arrival_dates);
+    RUN_TEST(test_format_date);
     return UNITY_END();
 }

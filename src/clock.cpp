@@ -108,6 +108,16 @@ void text(char* out, size_t size)
     clk::formatClock(static_cast<int64_t>(now), offsetSeconds, out, size);
 }
 
+void dateText(char* out, size_t size)
+{
+    const int64_t now = utcNow();
+    if (!offsetKnown || now == 0) {
+        snprintf(out, size, "%s", "");
+        return;
+    }
+    clk::formatDate(now, offsetSeconds, out, size);
+}
+
 int64_t utcNow()
 {
     const time_t now = time(nullptr);
