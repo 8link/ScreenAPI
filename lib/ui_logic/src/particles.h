@@ -59,6 +59,10 @@ private:
     uint32_t state_ = 1;
 };
 
+// Hue of character `index` in the rolling rainbow text: the colored hues in
+// order along the text (white left out), moving one character to the right per step.
+uint8_t textHue(int index, uint32_t step);
+
 // Brightness of the whole animation: rises from 0 to maxLevel over rampMs,
 // holds, and falls back to 0 over the last rampMs of durationMs.
 uint8_t fadeLevel(uint32_t elapsedMs, uint32_t durationMs, uint32_t rampMs, uint8_t maxLevel);

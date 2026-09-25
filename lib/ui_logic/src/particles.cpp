@@ -124,6 +124,12 @@ void ParticleField::burst(float x, float y, float boost)
     }
 }
 
+uint8_t textHue(int index, uint32_t step)
+{
+    constexpr int kColors = kParticleHues - 1;  // the last hue is white
+    return static_cast<uint8_t>((index % kColors + kColors - static_cast<int>(step % kColors)) % kColors);
+}
+
 uint8_t fadeLevel(uint32_t elapsedMs, uint32_t durationMs, uint32_t rampMs, uint8_t maxLevel)
 {
     if (elapsedMs >= durationMs) {

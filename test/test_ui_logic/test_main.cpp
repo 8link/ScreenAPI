@@ -466,6 +466,20 @@ static void test_particles_burst_away_then_slow_down()
     }
 }
 
+static void test_text_hue_rolls_through_colored_hues()
+{
+    TEST_ASSERT_EQUAL(0, textHue(0, 0));
+    TEST_ASSERT_EQUAL(1, textHue(1, 0));
+    TEST_ASSERT_EQUAL(4, textHue(4, 0));
+    TEST_ASSERT_EQUAL(0, textHue(5, 0));  // wraps, never white
+    TEST_ASSERT_EQUAL(0, textHue(1, 1));  // moves right: character 1 takes character 0's hue
+    TEST_ASSERT_EQUAL(4, textHue(0, 1));
+    TEST_ASSERT_EQUAL(textHue(3, 2), textHue(3, 7));
+    for (int i = 0; i < 12; ++i) {
+        TEST_ASSERT_TRUE(textHue(i, 1000003) < kParticleHues - 1);
+    }
+}
+
 static void test_fade_level_ramps_in_and_out()
 {
     TEST_ASSERT_EQUAL(0, fadeLevel(0, 5000, 600, 7));
@@ -565,6 +579,7 @@ int main()
     RUN_TEST(test_particles_trail_follows_the_head);
     RUN_TEST(test_particles_gather_around_a_point);
     RUN_TEST(test_particles_burst_away_then_slow_down);
+    RUN_TEST(test_text_hue_rolls_through_colored_hues);
     RUN_TEST(test_fade_level_ramps_in_and_out);
     RUN_TEST(test_saver_goes_dark_after_idle_time);
     RUN_TEST(test_saver_idle_time_restarts_on_content_or_press);

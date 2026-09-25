@@ -918,20 +918,52 @@ void wake()
     lastBarValid = false;
 }
 
-void drawParticles(const ui::ParticleField& field, uint8_t level, const char* clock, const char* date,
-                   uint8_t textLevel)
+namespace {
+
+// Draws text centered on centerX, each character in its rolling rainbow hue.
+void drawRainbow(const char* text, int centerX, int top, FontId font, uint8_t level, uint32_t hueStep)
+{
+    int x = centerX - textWidth(text, font) / 2;
+    char glyph[2] = {'\0', '\0'};
+    for (int i = 0; text[i] != '\0'; ++i) {
+        glyph[0] = text[i];
+        x += drawText(glyph, x, top, Align::Left, font, particleColor(ui::textHue(i, hueStep), level));
+    }
+}
+
+}  // namespace
+
+void drawParticles(const ui::ParticleField& field, uint8_t level, const SaverText& text)
 {
     // Sizes from the shorter screen side: 1 px trails and a 3 px head at 135 px,
     // 2 px trails and a 7 px head on the AMOLED's 368 px.
     constexpr int kSide = kWidth < kHeight ? kWidth : kHeight;
     constexpr int kHeadRadius = kSide / 120;
     constexpr bool kWideTrail = kSide >= 300;
+    constexpr int kTop = kParticleLevels - 1;
+    // Glow blobs: up to 0.22 of the shorter side (30 px at 135 px, 81 px at 368 px),
+    // an outer ring at level 1 and a core at level 2, so the glow stays dim.
+    constexpr int kGlowRadius = kSide * 22 / 100;
+    const uint8_t glow = text.glow < level ? text.glow : level;
+    const uint8_t trailLevel = static_cast<uint8_t>(level * (kTop - glow) / kTop);
     canvas->fillScreen(kBlack);
-    for (int i = 0; level > 0 && i < field.count(); ++i) {
+    if (glow > 0) {
+        const int radius = kGlowRadius * glow / kTop;
+        const uint8_t core = glow >= kTop / 2 ? 2 : 1;
+        // All outer rings first, then all cores, so the blobs merge into one glow.
+        for (int ring = 0; ring < 2; ++ring) {
+            for (int i = 0; i < field.count(); ++i) {
+                const ui::Particle& p = field.particle(i);
+                canvas->fillCircle(pixel(p.trail[0].x), pixel(p.trail[0].y), ring == 0 ? radius : radius * 55 / 100,
+                                   particleColor(p.hue, ring == 0 ? 1 : core));
+            }
+        }
+    }
+    for (int i = 0; trailLevel > 0 && i < field.count(); ++i) {
         const ui::Particle& p = field.particle(i);
         // Oldest segment first; each is dimmer the older it is.
         for (int j = p.trailCount - 1; j > 0; --j) {
-            const uint8_t segment = static_cast<uint8_t>(level * (ui::kTrailLength - j + 1) / ui::kTrailLength);
+            const uint8_t segment = static_cast<uint8_t>(trailLevel * (ui::kTrailLength - j + 1) / ui::kTrailLength);
             if (segment == 0) {
                 continue;
             }
@@ -946,17 +978,15 @@ void drawParticles(const ui::ParticleField& field, uint8_t level, const char* cl
                 canvas->drawLine(x0, y0 + 1, x1, y1 + 1, color);
             }
         }
-        canvas->fillCircle(pixel(p.trail[0].x), pixel(p.trail[0].y), kHeadRadius, particleColor(p.hue, level));
+        canvas->fillCircle(pixel(p.trail[0].x), pixel(p.trail[0].y), kHeadRadius, particleColor(p.hue, trailLevel));
     }
-    if (textLevel > 0) {
-        // In the white particle hue, so the text adds no palette colors.
-        constexpr uint8_t kWhiteHue = ui::kParticleHues - 1;
-        const uint16_t color = particleColor(kWhiteHue, textLevel);
-        const TextLine textLines[] = {
-            {clock, kLargeFont, color, 0},
-            {date, kSmallFont, color, 2},
-        };
-        drawBlock(textLines, 2, kWidth / 2, (kHeight - blockHeight(textLines, 2)) / 2, Align::Center);
+    if (text.level > 0) {
+        constexpr int kGap = 2;
+        const int clockHeight = fonts[kLargeFont].lineHeight;
+        const int top = (kHeight - clockHeight - kGap - fonts[kSmallFont].lineHeight) / 2;
+        const uint8_t dateLevel = text.level > 2 ? text.level - 2 : text.level;
+        drawRainbow(text.clock, kWidth / 2, top, kLargeFont, text.level, text.hueStep);
+        drawRainbow(text.date, kWidth / 2, top + clockHeight + kGap, kSmallFont, dateLevel, text.hueStep);
     }
     canvas->flush();
     lastBarValid = false;

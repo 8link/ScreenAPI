@@ -76,11 +76,19 @@ void wake();
 // kParticleLevels - 1 is full brightness.
 constexpr uint8_t kParticleLevels = 8;
 
+// Clock over the screen saver particles (F-014).
+struct SaverText {
+    const char* clock;  // large font
+    const char* date;   // small font, below the clock
+    uint8_t level;      // text brightness, 0 .. kParticleLevels - 1; 0 draws no text
+    uint8_t glow;       // 0 .. kParticleLevels - 1: how far the particles have turned into the glow
+    uint32_t hueStep;   // moves the rainbow along the text
+};
+
 // One animation frame: every particle's trail fades from its head, all at the
-// given brightness level. Over the particles, the clock (large font) and the
-// date (small font) centered on the screen at textLevel; 0 draws no text. The
-// panel must be awake.
-void drawParticles(const ui::ParticleField& field, uint8_t level, const char* clock, const char* date,
-                   uint8_t textLevel);
+// given brightness level. With glow, the trails dim and each head swells into
+// a dim blob in its hue; the clock and date are drawn centered on top, one hue
+// per character. The panel must be awake.
+void drawParticles(const ui::ParticleField& field, uint8_t level, const SaverText& text);
 
 }  // namespace screen
