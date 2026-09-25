@@ -484,9 +484,6 @@ void loop()
     if (mcpEvents.messageDropped) {
         screen::showQueueFullPopup(now);
     }
-    if (mcpEvents.messageShown && hal::hasSpeaker()) {
-        hal::playChime();  // every show_message, replacements included (F-013)
-    }
     if (mcpEvents.queueChanged) {
         contentChanged = true;
         redraw = true;
@@ -498,6 +495,11 @@ void loop()
 
     const bool idle = !covered && queue.empty();
     redraw |= enterSaverPhase(saver.update(now, idle, inputActive), now);
+    // After the wake: its CPU clock switch restarts the PLL that clocks I2S,
+    // which distorted a chime already playing (F-013, F-014).
+    if (mcpEvents.messageShown && hal::hasSpeaker()) {
+        hal::playChime();  // every show_message, replacements included (F-013)
+    }
     if (saverPhase == ui::SaverPhase::Animating) {
         runAnimation(now);
     } else if (saverPhase == ui::SaverPhase::Awake && !covered) {
