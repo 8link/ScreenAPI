@@ -45,9 +45,12 @@ constexpr uint32_t kSaverBurstMs = kSaverTextMs + kSaverTextLengthMs - kSaverTex
 constexpr float kSaverBurstBoost = 3.0f;
 static_assert(kSaverTextMs + kSaverTextLengthMs <= kSaverAnimationMs - kSaverFadeMs,
               "the clock must be gone before the animation fades out");
-// CPU clock (F-014): 80 MHz is the lowest at which Wi-Fi runs.
+// CPU clock (F-014): 80 MHz is the lowest at which Wi-Fi runs. The animation
+// runs at the top clock: the AMOLED's full-frame flush converts every pixel on
+// the CPU.
 constexpr uint32_t kCpuMhz = 160;
 constexpr uint32_t kSaverCpuMhz = 80;
+constexpr uint32_t kSaverAnimationCpuMhz = 240;
 
 mq::MessageQueue queue;
 ui::ButtonPair buttons(kDebounceMs, kLongPressMs, kWifiResetHoldMs);  // first: delete, second: scroll
@@ -305,12 +308,14 @@ bool enterSaverPhase(ui::SaverPhase phase, uint64_t now)
         return true;
     case ui::SaverPhase::Dark:
         if (previous == ui::SaverPhase::Animating && particleFrames > 0) {
-            Serial.printf("Screen saver: %u frames, %u ms per frame to draw\n", static_cast<unsigned>(particleFrames),
-                          static_cast<unsigned>(particleRenderUs / particleFrames / 1000));
+            Serial.printf("Screen saver: %u frames, %u ms per frame to draw at %u MHz\n",
+                          static_cast<unsigned>(particleFrames),
+                          static_cast<unsigned>(particleRenderUs / particleFrames / 1000),
+                          static_cast<unsigned>(getCpuFrequencyMhz()));
         }
         screen::sleep();
+        setCpuMhz(kSaverCpuMhz);
         if (previous == ui::SaverPhase::Awake) {
-            setCpuMhz(kSaverCpuMhz);
             Serial.printf("Screen saver on, CPU %u MHz\n", static_cast<unsigned>(getCpuFrequencyMhz()));
         }
         return false;
@@ -324,6 +329,7 @@ bool enterSaverPhase(ui::SaverPhase phase, uint64_t now)
         saverGathering = false;
         saverBurst = false;
         saverSlowed = false;
+        setCpuMhz(kSaverAnimationCpuMhz);
         screen::wake();
         lastParticleFrameMs = now;
         particleFrames = 0;
