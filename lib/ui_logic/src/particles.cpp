@@ -18,6 +18,7 @@ constexpr float kMaxSpeed = 0.5f;
 constexpr float kGatherTurn = 6.0f;   // rad/s toward the gather point: circles of 6 to 11 px at 240 x 135
 constexpr float kGatherTimeS = 0.4f;  // far particles rush in: speed at least distance / this
 constexpr float kBoostDecayS = 0.35f;  // time constant of the burst speed-up
+constexpr float kPaceEaseS = 0.3f;     // time constant of a pace change
 
 float clampTo(float value, float low, float high)
 {
@@ -47,6 +48,8 @@ void ParticleField::start(int width, int height, uint32_t seed)
     state_ = seed != 0 ? seed : 1;  // xorshift never leaves 0
     gathering_ = false;
     boost_ = 1.0f;
+    pace_ = 1.0f;
+    paceTarget_ = 1.0f;
     const int area = width * height;
     count_ = area / kAreaPerParticle;
     count_ = count_ < kMinParticles ? kMinParticles : count_ > kMaxCount ? kMaxCount : count_;
@@ -74,9 +77,10 @@ void ParticleField::step(float dtS)
             const float dx = center_.x - p.trail[0].x;
             const float dy = center_.y - p.trail[0].y;
             const float diff = remainderf(atan2f(dy, dx) - p.heading, 2.0f * kPi);
-            p.heading += clampTo(diff, -kGatherTurn * dtS, kGatherTurn * dtS);
+            const float maxTurn = kGatherTurn * pace_ * dtS;
+            p.heading += clampTo(diff, -maxTurn, maxTurn);
             const float rush = sqrtf(dx * dx + dy * dy) / kGatherTimeS;
-            speed = rush > speed ? rush : speed;
+            speed = (rush > speed ? rush : speed) * pace_;
         } else {
             p.turn = clampTo(p.turn + randomRange(-kTurnDrift, kTurnDrift) * dtS, -kMaxTurn, kMaxTurn);
             p.heading += p.turn * dtS;
@@ -101,6 +105,12 @@ void ParticleField::step(float dtS)
         p.trailCount = kept + 1;
     }
     boost_ = 1.0f + (boost_ - 1.0f) * expf(-dtS / kBoostDecayS);
+    pace_ = paceTarget_ + (pace_ - paceTarget_) * expf(-dtS / kPaceEaseS);
+}
+
+void ParticleField::setPace(float pace)
+{
+    paceTarget_ = pace;
 }
 
 void ParticleField::gather(float x, float y)
@@ -113,6 +123,8 @@ void ParticleField::burst(float x, float y, float boost)
 {
     gathering_ = false;
     boost_ = boost;
+    pace_ = 1.0f;
+    paceTarget_ = 1.0f;
     for (int i = 0; i < count_; ++i) {
         Particle& p = particles_[i];
         const float dx = p.trail[0].x - x;
@@ -122,12 +134,6 @@ void ParticleField::burst(float x, float y, float boost)
         }
         p.turn = 0.0f;
     }
-}
-
-uint8_t textHue(int index, uint32_t step)
-{
-    constexpr int kColors = kParticleHues - 1;  // the last hue is white
-    return static_cast<uint8_t>((index % kColors + kColors - static_cast<int>(step % kColors)) % kColors);
 }
 
 uint8_t fadeLevel(uint32_t elapsedMs, uint32_t durationMs, uint32_t rampMs, uint8_t maxLevel)

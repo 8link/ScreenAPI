@@ -918,21 +918,6 @@ void wake()
     lastBarValid = false;
 }
 
-namespace {
-
-// Draws text centered on centerX, each character in its rolling rainbow hue.
-void drawRainbow(const char* text, int centerX, int top, FontId font, uint8_t level, uint32_t hueStep)
-{
-    int x = centerX - textWidth(text, font) / 2;
-    char glyph[2] = {'\0', '\0'};
-    for (int i = 0; text[i] != '\0'; ++i) {
-        glyph[0] = text[i];
-        x += drawText(glyph, x, top, Align::Left, font, particleColor(ui::textHue(i, hueStep), level));
-    }
-}
-
-}  // namespace
-
 void drawParticles(const ui::ParticleField& field, uint8_t level, const SaverText& text)
 {
     // Sizes from the shorter screen side: 1 px trails and a 3 px head at 135 px,
@@ -942,21 +927,19 @@ void drawParticles(const ui::ParticleField& field, uint8_t level, const SaverTex
     constexpr bool kWideTrail = kSide >= 300;
     constexpr int kTop = kParticleLevels - 1;
     // Glow blobs: up to 0.22 of the shorter side (30 px at 135 px, 81 px at 368 px),
-    // an outer ring at level 1 and a core at level 2, so the glow stays dim.
+    // all in blue at the lowest brightness step, merging into one dim glow.
     constexpr int kGlowRadius = kSide * 22 / 100;
+    constexpr uint8_t kGlowHue = 4;     // blue in kParticleHueRgb
+    constexpr uint8_t kWhiteHue = 5;
     const uint8_t glow = text.glow < level ? text.glow : level;
     const uint8_t trailLevel = static_cast<uint8_t>(level * (kTop - glow) / kTop);
     canvas->fillScreen(kBlack);
     if (glow > 0) {
         const int radius = kGlowRadius * glow / kTop;
-        const uint8_t core = glow >= kTop / 2 ? 2 : 1;
-        // All outer rings first, then all cores, so the blobs merge into one glow.
-        for (int ring = 0; ring < 2; ++ring) {
-            for (int i = 0; i < field.count(); ++i) {
-                const ui::Particle& p = field.particle(i);
-                canvas->fillCircle(pixel(p.trail[0].x), pixel(p.trail[0].y), ring == 0 ? radius : radius * 55 / 100,
-                                   particleColor(p.hue, ring == 0 ? 1 : core));
-            }
+        const uint16_t color = particleColor(kGlowHue, 1);
+        for (int i = 0; i < field.count(); ++i) {
+            const ui::Particle& p = field.particle(i);
+            canvas->fillCircle(pixel(p.trail[0].x), pixel(p.trail[0].y), radius, color);
         }
     }
     for (int i = 0; trailLevel > 0 && i < field.count(); ++i) {
@@ -985,8 +968,9 @@ void drawParticles(const ui::ParticleField& field, uint8_t level, const SaverTex
         const int clockHeight = fonts[kLargeFont].lineHeight;
         const int top = (kHeight - clockHeight - kGap - fonts[kSmallFont].lineHeight) / 2;
         const uint8_t dateLevel = text.level > 2 ? text.level - 2 : text.level;
-        drawRainbow(text.clock, kWidth / 2, top, kLargeFont, text.level, text.hueStep);
-        drawRainbow(text.date, kWidth / 2, top + clockHeight + kGap, kSmallFont, dateLevel, text.hueStep);
+        drawText(text.clock, kWidth / 2, top, Align::Center, kLargeFont, particleColor(kWhiteHue, text.level));
+        drawText(text.date, kWidth / 2, top + clockHeight + kGap, Align::Center, kSmallFont,
+                 particleColor(kWhiteHue, dateLevel));
     }
     canvas->flush();
     lastBarValid = false;

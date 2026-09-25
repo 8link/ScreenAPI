@@ -466,17 +466,29 @@ static void test_particles_burst_away_then_slow_down()
     }
 }
 
-static void test_text_hue_rolls_through_colored_hues()
+static void test_particles_slow_pace_keeps_the_swarm_together()
 {
-    TEST_ASSERT_EQUAL(0, textHue(0, 0));
-    TEST_ASSERT_EQUAL(1, textHue(1, 0));
-    TEST_ASSERT_EQUAL(4, textHue(4, 0));
-    TEST_ASSERT_EQUAL(0, textHue(5, 0));  // wraps, never white
-    TEST_ASSERT_EQUAL(0, textHue(1, 1));  // moves right: character 1 takes character 0's hue
-    TEST_ASSERT_EQUAL(4, textHue(0, 1));
-    TEST_ASSERT_EQUAL(textHue(3, 2), textHue(3, 7));
-    for (int i = 0; i < 12; ++i) {
-        TEST_ASSERT_TRUE(textHue(i, 1000003) < kParticleHues - 1);
+    ParticleField field;
+    field.start(240, 135, 3);
+    field.gather(120.0f, 67.5f);
+    for (int frame = 0; frame < 30; ++frame) {
+        field.step(0.04f);
+    }
+    field.setPace(0.3f);
+    for (int frame = 0; frame < 75; ++frame) {  // 3 s
+        field.step(0.04f);
+    }
+    for (int i = 0; i < field.count(); ++i) {
+        const Particle& p = field.particle(i);
+        TEST_ASSERT_TRUE(distance(p.trail[0], 120.0f, 67.5f) < 135.0f * 0.2f);
+        // Moves at most about 0.3 of its normal distance per step.
+        TEST_ASSERT_TRUE(distance(p.trail[0], p.trail[1].x, p.trail[1].y) < 0.35f * p.speed * 0.04f);
+    }
+    field.burst(120.0f, 67.5f, 3.0f);  // back to full pace, and faster
+    field.step(0.04f);
+    for (int i = 0; i < field.count(); ++i) {
+        const Particle& p = field.particle(i);
+        TEST_ASSERT_TRUE(distance(p.trail[0], p.trail[1].x, p.trail[1].y) > 2.0f * p.speed * 0.04f);
     }
 }
 
@@ -579,7 +591,7 @@ int main()
     RUN_TEST(test_particles_trail_follows_the_head);
     RUN_TEST(test_particles_gather_around_a_point);
     RUN_TEST(test_particles_burst_away_then_slow_down);
-    RUN_TEST(test_text_hue_rolls_through_colored_hues);
+    RUN_TEST(test_particles_slow_pace_keeps_the_swarm_together);
     RUN_TEST(test_fade_level_ramps_in_and_out);
     RUN_TEST(test_saver_goes_dark_after_idle_time);
     RUN_TEST(test_saver_idle_time_restarts_on_content_or_press);

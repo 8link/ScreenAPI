@@ -41,6 +41,10 @@ public:
     // Ends gathering: every particle heads straight away from (x, y) at
     // `boost` times its speed, easing back to its own speed within about a second.
     void burst(float x, float y, float boost);
+    // Scales speed and turning, so a gathered swarm circles at the same radius
+    // but more slowly; eases to the new pace within about a second. A burst
+    // resets it to 1.
+    void setPace(float pace);
 
     int count() const { return count_; }
     const Particle& particle(int index) const { return particles_[index]; }
@@ -54,14 +58,12 @@ private:
     bool gathering_ = false;
     Point center_{0.0f, 0.0f};
     float boost_ = 1.0f;  // speed factor after a burst, decays to 1
+    float pace_ = 1.0f;
+    float paceTarget_ = 1.0f;
     int width_ = 0;
     int height_ = 0;
     uint32_t state_ = 1;
 };
-
-// Hue of character `index` in the rolling rainbow text: the colored hues in
-// order along the text (white left out), moving one character to the right per step.
-uint8_t textHue(int index, uint32_t step);
 
 // Brightness of the whole animation: rises from 0 to maxLevel over rampMs,
 // holds, and falls back to 0 over the last rampMs of durationMs.

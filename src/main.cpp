@@ -40,7 +40,7 @@ constexpr uint32_t kSaverGatherMs = 800;
 constexpr uint32_t kSaverTextMs = 1600;
 constexpr uint32_t kSaverTextLengthMs = 7000;  // fade in, hold 6.2 s, fade out
 constexpr uint32_t kSaverTextRampMs = 400;
-constexpr uint32_t kSaverHueStepMs = 400;  // the rainbow moves one character
+constexpr float kSaverGlowPace = 0.3f;  // the glow circles at 0.3 of the particles' speed
 constexpr uint32_t kSaverBurstMs = kSaverTextMs + kSaverTextLengthMs - kSaverTextRampMs;
 constexpr float kSaverBurstBoost = 3.0f;
 static_assert(kSaverTextMs + kSaverTextLengthMs <= kSaverAnimationMs - kSaverFadeMs,
@@ -75,6 +75,7 @@ char saverClock[8] = "";
 char saverDate[12] = "";
 bool saverGathering = false;
 bool saverBurst = false;
+bool saverSlowed = false;
 uint32_t particleFrames = 0;
 uint64_t particleRenderUs = 0;
 
@@ -322,6 +323,7 @@ bool enterSaverPhase(ui::SaverPhase phase, uint64_t now)
         }
         saverGathering = false;
         saverBurst = false;
+        saverSlowed = false;
         screen::wake();
         lastParticleFrameMs = now;
         particleFrames = 0;
@@ -335,7 +337,7 @@ bool enterSaverPhase(ui::SaverPhase phase, uint64_t now)
 // text and glow for this frame.
 screen::SaverText runClockShow(uint32_t elapsedMs, uint8_t level)
 {
-    screen::SaverText text{saverClock, saverDate, 0, 0, elapsedMs / kSaverHueStepMs};
+    screen::SaverText text{saverClock, saverDate, 0, 0};
     if (saverClock[0] == '\0') {
         return text;
     }
@@ -351,6 +353,10 @@ screen::SaverText runClockShow(uint32_t elapsedMs, uint8_t level)
     }
     if (elapsedMs < kSaverTextMs) {
         return text;
+    }
+    if (!saverSlowed && !saverBurst) {
+        saverSlowed = true;
+        particles.setPace(kSaverGlowPace);
     }
     // The glow follows the text: in while it fades in, out while it fades out.
     const uint8_t shown = ui::fadeLevel(elapsedMs - kSaverTextMs, kSaverTextLengthMs, kSaverTextRampMs,
