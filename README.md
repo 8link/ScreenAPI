@@ -1,6 +1,10 @@
 # ScreenAPI
 
 <p align="center">
+  <img src="images/screenapi-tdisplay-question.jpg" alt="ScreenAPI on a LilyGO T-Display: an agent's question in blue, waiting for the user" width="98%">
+</p>
+
+<p align="center">
   <img src="images/screenapi-amoled.jpg" alt="ScreenAPI on a square AMOLED board: a Build finished message with a 7:05 countdown" width="49%">
   <img src="images/screenapi-lcd.jpg" alt="ScreenAPI on a small landscape LCD board: a Docs untracked message in green" width="49%">
 </p>
