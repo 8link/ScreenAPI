@@ -36,7 +36,7 @@ constexpr int kCornerRadiusMax = (board::kCornerInset * 1000 + 292) / 293;
 constexpr int kRoundedBarTop = 8;
 
 constexpr uint32_t kTitleSpeedPxPerS = 40;
-constexpr uint32_t kValueSpeedPxPerS = 20;
+constexpr uint32_t kValueSpeedPxPerS = 14;
 constexpr uint32_t kArrivalSpeedPxPerS = 20;
 constexpr uint32_t kScrollPauseMs = 1500;
 constexpr uint32_t kFrameMs = 33;
