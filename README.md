@@ -77,20 +77,20 @@ flowchart LR
 
 ## Hardware
 
-ScreenAPI runs on ESP32-family boards with Wi-Fi, BLE, and a display. Three boards are supported today; the firmware is structured so that adding more is mostly configuration (see [Built to be ported](#built-to-be-ported)).
+ScreenAPI runs on ESP32-family boards with Wi-Fi, BLE, and a display. Four boards are supported today; the firmware is structured so that adding more is mostly configuration (see [Built to be ported](#built-to-be-ported)).
 
-| | LilyGO TTGO T-Display | Waveshare ESP32-S3-Touch-AMOLED-1.8 | M5Stack M5StickS3 |
-|---|---|---|---|
-| **Chip** | ESP32 (dual-core LX6, 240 MHz) | ESP32-S3 (dual-core LX7, 240 MHz) | ESP32-S3-PICO-1 (dual-core LX7, 240 MHz) |
-| **Memory** | 4 MB flash, no PSRAM | 16 MB flash, 8 MB PSRAM | 8 MB flash, 8 MB PSRAM |
-| **Display** | 1.14 inch IPS LCD, ST7789, 240 x 135, SPI | 1.8 inch AMOLED, 368 x 448, QSPI (CO5300 or SH8601) | 1.14 inch IPS LCD, ST7789P3, 240 x 135, SPI |
-| **Orientation** | Landscape | Portrait | Landscape |
-| **Input** | Two buttons | BOOT button and capacitive touchscreen | Two buttons (front and side) |
-| **Battery** | Li-ion connector, voltage via ADC | Li-ion connector, AXP2101 power management chip | Built-in 250 mAh cell, M5PM1 power management chip |
-| **Sound** | None | ES8311 codec and speaker: chime on new messages | ES8311 codec and speaker: chime on new messages |
-| **USB** | USB-C with a USB-UART bridge | USB-C, native USB serial | USB-C, native USB serial |
-| **PlatformIO env** | `tdisplay` | `waveshare_amoled18` | `m5sticks3` |
-| **Status** | Verified on the device up to firmware 0.0.14 | Boots and runs Wi-Fi setup since 0.0.16 | Added in 0.0.28 |
+| | LilyGO TTGO T-Display | Waveshare ESP32-S3-Touch-AMOLED-1.8 | M5Stack M5StickS3 | LilyGO T-Display-S3 |
+|---|---|---|---|---|
+| **Chip** | ESP32 (dual-core LX6, 240 MHz) | ESP32-S3 (dual-core LX7, 240 MHz) | ESP32-S3-PICO-1 (dual-core LX7, 240 MHz) | ESP32-S3R8 (dual-core LX7, 240 MHz) |
+| **Memory** | 4 MB flash, no PSRAM | 16 MB flash, 8 MB PSRAM | 8 MB flash, 8 MB PSRAM | 16 MB flash, 8 MB PSRAM |
+| **Display** | 1.14 inch IPS LCD, ST7789, 240 x 135, SPI | 1.8 inch AMOLED, 368 x 448, QSPI (CO5300 or SH8601) | 1.14 inch IPS LCD, ST7789P3, 240 x 135, SPI | 1.9 inch IPS LCD, ST7789, 320 x 170, 8-bit parallel |
+| **Orientation** | Landscape | Portrait | Landscape | Landscape |
+| **Input** | Two buttons | BOOT button and capacitive touchscreen | Two buttons (front and side) | Two buttons (BOOT and KEY) |
+| **Battery** | Li-ion connector, voltage via ADC | Li-ion connector, AXP2101 power management chip | Built-in 250 mAh cell, M5PM1 power management chip | Li-ion connector, voltage via ADC |
+| **Sound** | None | ES8311 codec and speaker: chime on new messages | ES8311 codec and speaker: chime on new messages | None |
+| **USB** | USB-C with a USB-UART bridge | USB-C, native USB serial | USB-C, native USB serial | USB-C, native USB serial |
+| **PlatformIO env** | `tdisplay` | `waveshare_amoled18` | `m5sticks3` | `tdisplay_s3` |
+| **Status** | Verified on the device up to firmware 0.0.14 | Boots and runs Wi-Fi setup since 0.0.16 | Added in 0.0.28 | Added in 0.0.37, not yet tested on a device |
 
 ### LilyGO TTGO T-Display
 
@@ -117,6 +117,14 @@ A pocket-sized ESP32-S3 stick with a small LCD, two buttons, a speaker, and a bu
 - **Battery:** cell voltage and USB presence from the M5PM1 power chip, which also switches the display supply and the speaker amplifier.
 - **Sound:** the same two-note chime as the AMOLED, through its ES8311 codec.
 - **Vendor:** [M5Stack M5StickS3](https://docs.m5stack.com/en/core/StickS3)
+
+### LilyGO T-Display-S3
+
+The ESP32-S3 successor to the T-Display, with a larger 1.9 inch screen on a fast parallel bus and 8 MB of PSRAM. ScreenAPI uses it in landscape with larger fonts. The firmware targets the version without touch; it also runs on the touch version, which then works with its buttons.
+
+- **Controls:** the KEY button (GPIO14) deletes the shown message, hold 1.5 s to clear all; the BOOT button (GPIO0) shows the next message; both held for 5 s reset Wi-Fi.
+- **Battery:** read through a 2:1 divider on GPIO4.
+- **Vendor:** [LilyGO T-Display-S3](https://github.com/Xinyuan-LilyGO/T-Display-S3)
 
 ## Built to be ported
 
@@ -170,6 +178,9 @@ pio run -e waveshare_amoled18 -j 2 -t upload --upload-port /dev/ttyACM0
 
 # M5Stack M5StickS3 (also /dev/ttyACM0: check which board is connected before flashing)
 pio run -e m5sticks3 -j 2 -t upload --upload-port /dev/ttyACM0
+
+# LilyGO T-Display-S3 (also /dev/ttyACM0)
+pio run -e tdisplay_s3 -j 2 -t upload --upload-port /dev/ttyACM0
 ```
 
 `-j 2` limits parallel compiler jobs; the U8g2 font source needs about 1 GB of RAM per job.
