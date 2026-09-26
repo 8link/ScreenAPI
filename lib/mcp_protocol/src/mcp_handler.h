@@ -14,12 +14,21 @@ namespace mcp {
 
 constexpr size_t kMaxRequestSize = 8192;
 
+// The sound a request asks for (PROJECT.md F-013, D-046).
+enum class Sound : uint8_t {
+    None,
+    NewMessage,  // confirm message, no other message waiting
+    Queued,      // confirm message, other messages already waiting
+    Timed,       // timed message, with or without others waiting
+    Rejected,    // show_message dropped by a full queue
+};
+
 struct Response {
     int httpStatus = 200;
     std::string body;  // JSON; empty for 202 Accepted
     bool queueChanged = false;
     bool messageDropped = false;  // show_message hit a full queue
-    bool messageShown = false;    // show_message added or replaced a message
+    Sound sound = Sound::None;
     std::string summary;          // one line for the serial log
 };
 

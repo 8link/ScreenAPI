@@ -86,7 +86,7 @@ bool hasSpeaker()
     return false;
 }
 
-void playChime() {}
+void playChime(Chime) {}
 
 // PORT: return true and implement readBattery() if the board can measure its
 // battery (ADC divider as on the T-Display, or a power chip as on the AMOLED).

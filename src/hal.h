@@ -69,10 +69,16 @@ bool deletePressed();
 bool scrollPressed();
 
 // false on boards without a speaker; playChime() is then never called.
-// playChime() starts a short chime for a new message and returns at once; a
-// call while a chime plays is ignored.
+// playChime() queues a short sound and returns at once; sounds requested while
+// one plays follow it in order (PROJECT.md F-013).
+enum class Chime : uint8_t {
+    NewMessage,  // confirm message, no other message waiting
+    Queued,      // confirm message, other messages already waiting
+    Timed,       // timed message
+    Rejected,    // message dropped by a full queue
+};
 bool hasSpeaker();
-void playChime();
+void playChime(Chime chime);
 
 // false on boards without a battery reading; readBattery() is then never
 // called and the top bar shows no battery. readBattery() is called about

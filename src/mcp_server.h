@@ -2,6 +2,7 @@
 // screenapi.local (PROJECT.md F-003, D-025).
 #pragma once
 
+#include <mcp_handler.h>
 #include <message_queue.h>
 
 namespace mcp_server {
@@ -9,7 +10,7 @@ namespace mcp_server {
 struct Events {
     bool queueChanged = false;
     bool messageDropped = false;
-    bool messageShown = false;  // show_message added or replaced a message
+    mcp::Sound sound = mcp::Sound::None;  // at most one request is handled per poll
 };
 
 void begin(mq::MessageQueue& queue);

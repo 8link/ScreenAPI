@@ -406,6 +406,27 @@ void saveIfDue(uint64_t now)
     }
 }
 
+// The sound for a show_message outcome (F-013).
+void playChimeFor(mcp::Sound sound)
+{
+    switch (sound) {
+    case mcp::Sound::NewMessage:
+        hal::playChime(hal::Chime::NewMessage);
+        break;
+    case mcp::Sound::Queued:
+        hal::playChime(hal::Chime::Queued);
+        break;
+    case mcp::Sound::Timed:
+        hal::playChime(hal::Chime::Timed);
+        break;
+    case mcp::Sound::Rejected:
+        hal::playChime(hal::Chime::Rejected);
+        break;
+    case mcp::Sound::None:
+        break;
+    }
+}
+
 }  // namespace
 
 void setup()
@@ -497,8 +518,8 @@ void loop()
     redraw |= enterSaverPhase(saver.update(now, idle, inputActive), now);
     // After the wake: its CPU clock switch restarts the PLL that clocks I2S,
     // which distorted a chime already playing (F-013, F-014).
-    if (mcpEvents.messageShown && hal::hasSpeaker()) {
-        hal::playChime();  // every show_message, replacements included (F-013)
+    if (hal::hasSpeaker()) {
+        playChimeFor(mcpEvents.sound);  // every show_message, replacements and a full queue included (F-013)
     }
     if (saverPhase == ui::SaverPhase::Animating) {
         runAnimation(now);

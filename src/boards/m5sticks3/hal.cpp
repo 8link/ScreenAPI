@@ -191,9 +191,10 @@ bool hasSpeaker()
     return speakerReady;
 }
 
-void playChime()
+// hal::Chime and es8311_chime::Tune list the same sounds in the same order.
+void playChime(Chime chime)
 {
-    es8311_chime::play();
+    es8311_chime::play(static_cast<es8311_chime::Tune>(chime));
 }
 
 bool hasBattery()

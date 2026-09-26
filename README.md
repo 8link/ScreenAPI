@@ -70,7 +70,7 @@ flowchart LR
 | **Lifecycle** | *Timed* messages count down only while they are on screen, with the time left in a small box. *Confirm* messages stay until deleted. A message with the same `id` replaces the old one, so a status update never fills the queue. |
 | **Queue** | 30 messages, newest first, saved to flash and restored after a reboot. When full, new messages are dropped, a popup says so, and the sender is told. |
 | **Screen** | Top bar with connection status, IP address, queue position, battery, and clock (NTP, timezone from your IP). Each message shows when it arrived in a box at the bottom left: the time for today, time and date for older ones. Long titles scroll sideways, long text scrolls down. Flicker-free, full-frame buffered drawing. |
-| **Sound** | A short two-note chime for every message sent to the display, on boards with a speaker (Waveshare AMOLED, M5StickS3). |
+| **Sound** | A short sound for every message sent to the display, on boards with a speaker (Waveshare AMOLED, M5StickS3): a two-note chime, a double tap when other messages are already waiting, a ping for timed messages, and a low tone when the queue is full. |
 | **Screen saver** | After a minute with no messages the screen turns off, and every 30 s it shows a 10 s animation of particles with fading trails: they gather, turn into a dim blue glow behind the clock and date, then burst away. Any press or new message wakes it. The CPU runs at 160 MHz, 80 MHz while the screen is off. |
 | **Controls** | Delete the shown message, hold to clear all, show the next message; hold both inputs for 5 s to reset Wi-Fi. |
 | **Setup** | Wi-Fi via the ESP BLE Provisioning app: scan the QR code on the screen. A welcome screen shows the IP address and MCP URL. |

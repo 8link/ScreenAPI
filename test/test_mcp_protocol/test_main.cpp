@@ -137,7 +137,7 @@ static void test_show_message_defaults_to_confirm_white_small()
     const Response response = callTool("show_message", R"({"title":"Claude Code","value":"Working"})");
     TEST_ASSERT_FALSE(toolIsError());
     TEST_ASSERT_TRUE(response.queueChanged);
-    TEST_ASSERT_TRUE(response.messageShown);
+    TEST_ASSERT_EQUAL(Sound::NewMessage, response.sound);
     TEST_ASSERT_NOT_NULL(strstr(toolText(), "Queue: 1 of 30"));
     const mq::Message* message = queue->current();
     TEST_ASSERT_EQUAL_STRING("Claude Code", message->title);
@@ -251,8 +251,27 @@ static void test_full_queue_drops_and_reports()
     TEST_ASSERT_TRUE(toolIsError());
     TEST_ASSERT_TRUE(response.messageDropped);
     TEST_ASSERT_FALSE(response.queueChanged);
-    TEST_ASSERT_FALSE(response.messageShown);
+    TEST_ASSERT_EQUAL(Sound::Rejected, response.sound);
     TEST_ASSERT_NOT_NULL(strstr(toolText(), "Queue full (30 of 30)"));
+}
+
+static void test_show_message_sound_depends_on_kind_and_waiting_messages()
+{
+    TEST_ASSERT_EQUAL(Sound::NewMessage, callTool("show_message", R"({"id":"a","value":"first"})").sound);
+    // Replacing the only message: nothing else is waiting.
+    TEST_ASSERT_EQUAL(Sound::NewMessage, callTool("show_message", R"({"id":"a","value":"again"})").sound);
+    TEST_ASSERT_EQUAL(Sound::Queued, callTool("show_message", R"({"id":"b","value":"second"})").sound);
+    TEST_ASSERT_EQUAL(Sound::Queued, callTool("show_message", R"({"id":"a","value":"replaced"})").sound);
+    TEST_ASSERT_EQUAL(Sound::Timed, callTool("show_message", R"({"value":"t","duration_s":5})").sound);
+    queue->clear();
+    TEST_ASSERT_EQUAL(Sound::Timed, callTool("show_message", R"({"value":"t","kind":"timed","duration_s":5})").sound);
+}
+
+static void test_rejected_requests_make_no_sound()
+{
+    TEST_ASSERT_EQUAL(Sound::None, callTool("show_message", R"({"value":""})").sound);
+    TEST_ASSERT_EQUAL(Sound::None, callTool("show_message", R"({"value":"t","kind":"timed"})").sound);
+    TEST_ASSERT_EQUAL(Sound::None, callTool("queue_status", "{}").sound);
 }
 
 static void test_queue_status()
@@ -302,6 +321,8 @@ int main()
     RUN_TEST(test_show_message_length_limit_counts_after_cleanup);
     RUN_TEST(test_show_message_reports_replaced_characters);
     RUN_TEST(test_full_queue_drops_and_reports);
+    RUN_TEST(test_show_message_sound_depends_on_kind_and_waiting_messages);
+    RUN_TEST(test_rejected_requests_make_no_sound);
     RUN_TEST(test_queue_status);
     RUN_TEST(test_clean_text);
     return UNITY_END();

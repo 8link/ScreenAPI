@@ -87,7 +87,7 @@ bool hasSpeaker()
     return false;
 }
 
-void playChime() {}
+void playChime(Chime) {}
 
 bool hasBattery()
 {

@@ -27,7 +27,7 @@ struct ToolOutcome {
     bool isError = false;
     bool queueChanged = false;
     bool messageDropped = false;
-    bool messageShown = false;
+    Sound sound = Sound::None;
 };
 
 std::string toJson(const JsonDocument& doc)
@@ -249,22 +249,27 @@ ToolOutcome showMessage(mq::MessageQueue& queue, JsonObjectConst args, int64_t r
     case mq::AddResult::Added:
         outcome.text = "Shown on the display. " + queueCountText(queue);
         outcome.queueChanged = true;
-        outcome.messageShown = true;
         break;
     case mq::AddResult::Replaced:
         outcome.text = std::string("Replaced the message with id \"") + id + "\" and showed it. " +
                        queueCountText(queue);
         outcome.queueChanged = true;
-        outcome.messageShown = true;
         break;
     case mq::AddResult::Full:
         outcome = toolError(
             "Queue full (30 of 30): the message was dropped and not shown. The user must delete messages on the "
             "device first. A message with the id of a queued message still replaces it.");
         outcome.messageDropped = true;
+        outcome.sound = Sound::Rejected;
         return outcome;
     case mq::AddResult::Invalid:
         return toolError("The display rejected the message.");
+    }
+    // Added and Replaced both put the message first, so any other message is one waiting behind it.
+    if (timed) {
+        outcome.sound = Sound::Timed;
+    } else {
+        outcome.sound = queue.size() > 1 ? Sound::Queued : Sound::NewMessage;
     }
     const size_t replaced = replacedId + replacedTitle + replacedValue;
     if (replaced > 0) {
@@ -302,7 +307,7 @@ Response toolCall(mq::MessageQueue& queue, JsonVariantConst id, JsonObjectConst 
     response.body = toJson(doc);
     response.queueChanged = outcome.queueChanged;
     response.messageDropped = outcome.messageDropped;
-    response.messageShown = outcome.messageShown;
+    response.sound = outcome.sound;
     response.summary = std::string(name) + ": " + outcome.text;
     return response;
 }

@@ -21,9 +21,26 @@ struct Note {
     uint32_t startMs;
     float decayMs;  // time for the note to fall to 1/e
 };
+struct TuneData {
+    const Note* notes;
+    int noteCount;
+    uint32_t ms;
+};
 // Two bell-like notes, high then low (E6, C6), overlapping.
-constexpr Note kChimeNotes[] = {{1318.5f, 0, 110}, {1046.5f, 140, 170}};
-constexpr uint32_t kChimeMs = 750;
+constexpr Note kNewMessageNotes[] = {{1318.5f, 0, 110}, {1046.5f, 140, 170}};
+// The same bell, one pitch, a quicker double tap (C6, C6).
+constexpr Note kQueuedNotes[] = {{1046.5f, 0, 70}, {1046.5f, 130, 110}};
+// One short high ping (G6).
+constexpr Note kTimedNotes[] = {{1568.0f, 0, 90}};
+// Low and falling (C5, A4), heard as an error next to the others.
+constexpr Note kRejectedNotes[] = {{523.3f, 0, 120}, {440.0f, 180, 200}};
+// Indexed by Tune.
+constexpr TuneData kTunes[] = {
+    {kNewMessageNotes, 2, 750},
+    {kQueuedNotes, 2, 550},
+    {kTimedNotes, 1, 400},
+    {kRejectedNotes, 2, 850},
+};
 
 // One register step: new value = (old & keep) | value; keep 0 writes value as is.
 struct CodecStep {
@@ -55,7 +72,7 @@ constexpr CodecStep kCodecSetup[] = {
 };
 
 Config settings{};
-TaskHandle_t chimeTask = nullptr;
+QueueHandle_t pendingTunes = nullptr;
 
 bool writeRegister(uint8_t reg, uint8_t value)
 {
@@ -130,12 +147,12 @@ bool beginI2s()
     return true;
 }
 
-// Writes the chime to I2S, blocking this task only. The amplifier is on only
+// Writes a tune to I2S, blocking this task only. The amplifier is on only
 // while it plays, so it does not hiss in between.
-void playNow()
+void playNow(const TuneData& tune)
 {
     static int16_t frames[kChimeFrames * 2];  // stereo, both channels the same
-    constexpr uint32_t total = kSampleRate * kChimeMs / 1000;
+    const uint32_t total = kSampleRate * tune.ms / 1000;
     constexpr float kAttackMs = 5;  // fade in, against clicks
     settings.setAmplifier(true);
     delay(5);
@@ -143,7 +160,8 @@ void playNow()
         for (int i = 0; i < kChimeFrames; i++) {
             const uint32_t n = start + i;
             float sample = 0;
-            for (const Note& note : kChimeNotes) {
+            for (int k = 0; k < tune.noteCount; k++) {
+                const Note& note = tune.notes[k];
                 const float ms = n * 1000.0f / kSampleRate - note.startMs;
                 if (ms < 0) {
                     continue;
@@ -166,9 +184,10 @@ void playNow()
 void chimeLoop(void*)
 {
     for (;;) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        playNow();
-        ulTaskNotifyTake(pdTRUE, 0);  // drop requests made while playing
+        Tune tune;
+        if (xQueueReceive(pendingTunes, &tune, portMAX_DELAY) == pdTRUE) {
+            playNow(kTunes[static_cast<int>(tune)]);
+        }
     }
 }
 
@@ -186,15 +205,24 @@ bool begin(const Config& config)
         i2s_driver_uninstall(kI2sPort);
         return false;
     }
+    pendingTunes = xQueueCreate(kMaxPending, sizeof(Tune));
+    if (pendingTunes == nullptr) {
+        return false;
+    }
     // Core 1 with the loop task, one priority above it: generating samples is
     // quick, then the task waits on I2S.
-    return xTaskCreatePinnedToCore(chimeLoop, "chime", 3072, nullptr, 2, &chimeTask, 1) == pdPASS;
+    if (xTaskCreatePinnedToCore(chimeLoop, "chime", 3072, nullptr, 2, nullptr, 1) != pdPASS) {
+        vQueueDelete(pendingTunes);
+        pendingTunes = nullptr;
+        return false;
+    }
+    return true;
 }
 
-void play()
+void play(Tune tune)
 {
-    if (chimeTask != nullptr) {
-        xTaskNotifyGive(chimeTask);
+    if (pendingTunes != nullptr) {
+        xQueueSend(pendingTunes, &tune, 0);  // never blocks the caller; dropped when full
     }
 }
 
