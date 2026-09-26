@@ -17,6 +17,30 @@ constexpr uint32_t kSerialBulkTimeoutMs = 1000;
 
 constexpr int kBatterySamples = 16;
 
+// Arduino_GFX 1.6.0's Arduino_ESP32LCD8::writeIndexedPixels sends a wrong color
+// for the second pixel of every 2,046-pixel DMA chunk: the pixel it holds back
+// for the command phase is overwritten by its packing loop (BOARDS.md Q-016).
+// Its writePixels is correct, so the canvas flush goes through the palette
+// into RGB565 here and uses that instead.
+class Lcd8Bus : public Arduino_ESP32LCD8 {
+public:
+    using Arduino_ESP32LCD8::Arduino_ESP32LCD8;
+
+    void writeIndexedPixels(uint8_t* data, uint16_t* idx, uint32_t len) override
+    {
+        static uint16_t pixels[LCD_MAX_PIXELS_AT_ONCE];
+        while (len > 0) {
+            const uint32_t count = len < LCD_MAX_PIXELS_AT_ONCE ? len : LCD_MAX_PIXELS_AT_ONCE;
+            for (uint32_t i = 0; i < count; ++i) {
+                pixels[i] = idx[data[i]];
+            }
+            writePixels(pixels, count);
+            data += count;
+            len -= count;
+        }
+    }
+};
+
 }  // namespace
 
 void begin()
@@ -56,8 +80,8 @@ const char* description()
 // the controller's 240 x 320 memory; settings from LilyGO's Arduino_GFX examples.
 Arduino_GFX* display()
 {
-    static Arduino_DataBus* bus = new Arduino_ESP32LCD8(TFT_DC, TFT_CS, TFT_WR, TFT_RD, TFT_D0, TFT_D1, TFT_D2,
-                                                        TFT_D3, TFT_D4, TFT_D5, TFT_D6, TFT_D7);
+    static Arduino_DataBus* bus = new Lcd8Bus(TFT_DC, TFT_CS, TFT_WR, TFT_RD, TFT_D0, TFT_D1, TFT_D2,
+                                              TFT_D3, TFT_D4, TFT_D5, TFT_D6, TFT_D7);
     static Arduino_GFX* panel =
         new Arduino_ST7789(bus, TFT_RST, board::kScreenRotation, true, 170, 320, 35, 0, 35, 0);
     return panel;
