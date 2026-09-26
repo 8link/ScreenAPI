@@ -4,6 +4,7 @@
 *.log
 include/secrets.h
 secrets.ini
+.deploy.env
 *.pem
 *.key
 captures/
