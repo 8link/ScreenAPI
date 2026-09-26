@@ -2,7 +2,7 @@
 // a board, and nothing else. The rest of the firmware (Wi-Fi, MCP, queue,
 // storage, layout, clock) is shared by all boards.
 //
-// To port ScreenAPI to another ESP32 board with Wi-Fi and a display, copy
+// To port McpVue to another ESP32 board with Wi-Fi and a display, copy
 // src/boards/template/hal.cpp and include/boards/template/, implement the
 // functions below, and add a PlatformIO env (PROJECT.md "Adding a board").
 // platformio.ini compiles only the selected board's folder.

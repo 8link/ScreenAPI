@@ -1,5 +1,5 @@
 // Template board (PROJECT.md "Adding a board"): a starting point for porting
-// ScreenAPI to another ESP32 with Wi-Fi and a display. Copy this folder and
+// McpVue to another ESP32 with Wi-Fi and a display. Copy this folder and
 // src/boards/template/ to <your_board>, then change every value marked PORT.
 // The "template" env builds it for a generic ESP32 so the template stays
 // compilable; it is not meant to be flashed as is.
@@ -23,8 +23,8 @@ constexpr uint8_t kScreenRotation = 1;  // landscape
 // corner test (serial command C, PROJECT.md D-036).
 constexpr int kCornerInset = 0;
 
-// The MCP URL is http://<hostname>.local/mcp. All boards use "screenapi" so
+// The MCP URL is http://<hostname>.local/mcp. All boards use "mcpvue" so
 // clients keep one URL (D-033); only one board should be online at a time.
-constexpr const char* kHostname = "screenapi";
+constexpr const char* kHostname = "mcpvue";
 
 }  // namespace board

@@ -695,7 +695,7 @@ bool begin()
 void showBootScreen()
 {
     const TextLine textLines[] = {
-        {"ScreenAPI", kLargeFont, kWhite, 0},
+        {"McpVue", kLargeFont, kWhite, 0},
         {"v" FW_VERSION, kSmallFont, kColorLightGrey, 6},
     };
     canvas->fillScreen(kBlack);
@@ -799,7 +799,7 @@ void showWelcome(const char* ssid, const char* ip)
     snprintf(url, sizeof(url), "%s.local/mcp", board::kHostname);
     const int gap = fonts[kSmallFont].lineHeight / 2;
     const TextLine textLines[] = {
-        {"ScreenAPI v" FW_VERSION, kSmallFont, kColorLightGrey, 0},
+        {"McpVue v" FW_VERSION, kSmallFont, kColorLightGrey, 0},
         {connected, kSmallFont, kWhite, gap},
         {ip, kLargeFont, kColorGreen, gap},
         {url, kSmallFont, kColorLightGrey, gap},

@@ -1,5 +1,5 @@
 /*
- * SH8601 QSPI AMOLED driver for Arduino_GFX 1.6.0 (ScreenAPI, PROJECT.md D-031).
+ * SH8601 QSPI AMOLED driver for Arduino_GFX 1.6.0 (McpVue, PROJECT.md D-031).
  * Derived from Arduino_GFX 1.6.0 Arduino_CO5300 with the SH8601 init sequence
  * and rotation flags from the Arduino_SH8601 driver in Waveshare's bundled
  * Arduino_GFX (ESP32-S3-Touch-AMOLED-1.8 repository). Arduino_GFX 1.6.0 has no

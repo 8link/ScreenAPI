@@ -65,7 +65,7 @@ static void test_initialize_echoes_supported_version()
     TEST_ASSERT_EQUAL(200, response.httpStatus);
     TEST_ASSERT_EQUAL(1, reply["id"].as<int>());
     TEST_ASSERT_EQUAL_STRING("2025-06-18", reply["result"]["protocolVersion"]);
-    TEST_ASSERT_EQUAL_STRING("ScreenAPI", reply["result"]["serverInfo"]["name"]);
+    TEST_ASSERT_EQUAL_STRING("McpVue", reply["result"]["serverInfo"]["name"]);
     TEST_ASSERT_EQUAL_STRING("9.9.9", reply["result"]["serverInfo"]["version"]);
     TEST_ASSERT_FALSE(reply["result"]["capabilities"]["tools"]["listChanged"].as<bool>());
     TEST_ASSERT_NOT_NULL(reply["result"]["instructions"].as<const char*>());

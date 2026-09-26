@@ -329,7 +329,7 @@ Response initialize(JsonVariantConst id, JsonObjectConst params, const char* ser
     JsonObject result = doc["result"].to<JsonObject>();
     result["protocolVersion"] = version;
     result["capabilities"]["tools"]["listChanged"] = false;
-    result["serverInfo"]["name"] = "ScreenAPI";
+    result["serverInfo"]["name"] = "McpVue";
     result["serverInfo"]["version"] = serverVersion;
     result["instructions"] = kInstructions;
 

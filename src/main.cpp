@@ -434,7 +434,7 @@ void setup()
     // Before Serial: the UART clock (APB, 80 MHz) is the same at 160 and 80 MHz.
     setCpuMhz(kCpuMhz);
     Serial.begin(115200);
-    Serial.printf("ScreenAPI v%s on %s, CPU %u MHz\n", FW_VERSION, board::kName,
+    Serial.printf("McpVue v%s on %s, CPU %u MHz\n", FW_VERSION, board::kName,
                   static_cast<unsigned>(getCpuFrequencyMhz()));
     hal::begin();
     Serial.printf("Hardware: %s\n", hal::description());

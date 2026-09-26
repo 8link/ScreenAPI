@@ -1,16 +1,16 @@
-# ScreenAPI
+# McpVue
 
 <p align="center">
-  <img src="images/screenapi-tdisplay-question.jpg" alt="ScreenAPI on a LilyGO T-Display: an agent's question in blue, waiting for the user" width="98%">
+  <img src="images/mcpvue-tdisplay-question.jpg" alt="McpVue on a LilyGO T-Display: an agent's question in blue, waiting for the user" width="98%">
 </p>
 
 <p align="center">
-  <img src="images/screenapi-amoled.jpg" alt="ScreenAPI on a square AMOLED board: a Build finished message with a 7:05 countdown" width="49%">
-  <img src="images/screenapi-lcd.jpg" alt="ScreenAPI on a small landscape LCD board: a Docs untracked message in green" width="49%">
+  <img src="images/mcpvue-amoled.jpg" alt="McpVue on a square AMOLED board: a Build finished message with a 7:05 countdown" width="49%">
+  <img src="images/mcpvue-lcd.jpg" alt="McpVue on a small landscape LCD board: a Docs untracked message in green" width="49%">
 </p>
 
 <p align="center">
-  If ScreenAPI is useful to you, a coffee helps a lot. Projects like this need real boards to test on and many evenings to get right.
+  If McpVue is useful to you, a coffee helps a lot. Projects like this need real boards to test on and many evenings to get right.
   <br><br>
   <a href="https://buymeacoffee.com/eucbuddy"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=%E2%98%95&slug=eucbuddy&button_colour=FFDD00&font_colour=000000&font_family=Poppins&outline_colour=000000&coffee_colour=ffffff" alt="Buy me a coffee" height="45"></a>
 </p>
@@ -21,6 +21,7 @@
 ![Arduino](https://img.shields.io/badge/framework-Arduino%20(ESP32)-00979D)
 ![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-6f42c1)
 ![Boards](https://img.shields.io/badge/boards-ESP32%20%7C%20ESP32--S3-lightgrey)
+[![Website](https://img.shields.io/badge/web-mcpvue.com-2ea44f)](https://mcpvue.com)
 ![Version](https://img.shields.io/badge/firmware-0.0.18-blue)
 
 ---
@@ -43,7 +44,7 @@
 
 - **Your agents report to your desk.** Claude Code can say "started", "tests running", "done, please review" on a screen next to your keyboard, without you watching the terminal.
 - **The device owns the message lifecycle.** Senders only pass data. The display queues up to 30 messages, shows the newest first, scrolls long text, counts down timed messages while they are on screen, and keeps confirm messages until you delete them.
-- **Nothing to configure in code.** Wi-Fi is set up from your phone over Bluetooth; the MCP endpoint announces itself on the network as `screenapi.local`.
+- **Nothing to configure in code.** Wi-Fi is set up from your phone over Bluetooth; the MCP endpoint announces itself on the network as `mcpvue.local`.
 
 ## How it works
 
@@ -77,7 +78,7 @@ flowchart LR
 
 ## Hardware
 
-ScreenAPI runs on ESP32-family boards with Wi-Fi, BLE, and a display. Four boards are supported today; the firmware is structured so that adding more is mostly configuration (see [Built to be ported](#built-to-be-ported)).
+McpVue runs on ESP32-family boards with Wi-Fi, BLE, and a display. Four boards are supported today; the firmware is structured so that adding more is mostly configuration (see [Built to be ported](#built-to-be-ported)).
 
 | | LilyGO TTGO T-Display | Waveshare ESP32-S3-Touch-AMOLED-1.8 | M5Stack M5StickS3 | LilyGO T-Display-S3 |
 |---|---|---|---|---|
@@ -94,7 +95,7 @@ ScreenAPI runs on ESP32-family boards with Wi-Fi, BLE, and a display. Four board
 
 ### LilyGO TTGO T-Display
 
-A compact, inexpensive ESP32 board with a small, sharp LCD, two buttons, and a battery connector. ScreenAPI uses it in landscape.
+A compact, inexpensive ESP32 board with a small, sharp LCD, two buttons, and a battery connector. McpVue uses it in landscape.
 
 - **Controls:** the GPIO35 button deletes the shown message, hold 1.5 s to clear all; the GPIO0 (BOOT) button shows the next message; both held for 5 s reset Wi-Fi.
 - **Battery:** read through a 2:1 divider on GPIO34; on USB power the top bar shows a lightning bolt.
@@ -102,7 +103,7 @@ A compact, inexpensive ESP32 board with a small, sharp LCD, two buttons, and a b
 
 ### Waveshare ESP32-S3-Touch-AMOLED-1.8
 
-A larger, high-density AMOLED touch board with plenty of memory. ScreenAPI uses it in portrait with larger fonts. The board comes in two revisions (SH8601 display with FT3168 touch, and CO5300 with CST820); the firmware detects which one it runs on.
+A larger, high-density AMOLED touch board with plenty of memory. McpVue uses it in portrait with larger fonts. The board comes in two revisions (SH8601 display with FT3168 touch, and CO5300 with CST820); the firmware detects which one it runs on.
 
 - **Controls:** BOOT deletes the shown message, hold 1.5 s to clear all; a touch on the screen shows the next message; BOOT and touch held for 5 s reset Wi-Fi.
 - **Battery:** percentage, USB, and charge state from the AXP2101 power chip.
@@ -111,7 +112,7 @@ A larger, high-density AMOLED touch board with plenty of memory. ScreenAPI uses 
 
 ### M5Stack M5StickS3
 
-A pocket-sized ESP32-S3 stick with a small LCD, two buttons, a speaker, and a built-in battery. ScreenAPI uses it in landscape with the same layout as the T-Display.
+A pocket-sized ESP32-S3 stick with a small LCD, two buttons, a speaker, and a built-in battery. McpVue uses it in landscape with the same layout as the T-Display.
 
 - **Controls:** the front button (KEY1) deletes the shown message, hold 1.5 s to clear all; the side button (KEY2) shows the next message; both held for 5 s reset Wi-Fi. The separate power button is left to the board.
 - **Battery:** cell voltage and USB presence from the M5PM1 power chip, which also switches the display supply and the speaker amplifier.
@@ -120,7 +121,7 @@ A pocket-sized ESP32-S3 stick with a small LCD, two buttons, a speaker, and a bu
 
 ### LilyGO T-Display-S3
 
-The ESP32-S3 successor to the T-Display, with a larger 1.9 inch screen on a fast parallel bus and 8 MB of PSRAM. ScreenAPI uses it in landscape with larger fonts. The firmware targets the version without touch; it also runs on the touch version, which then works with its buttons.
+The ESP32-S3 successor to the T-Display, with a larger 1.9 inch screen on a fast parallel bus and 8 MB of PSRAM. McpVue uses it in landscape with larger fonts. The firmware targets the version without touch; it also runs on the touch version, which then works with its buttons.
 
 - **Controls:** the KEY button (GPIO14) deletes the shown message, hold 1.5 s to clear all; the BOOT button (GPIO0) shows the next message; both held for 5 s reset Wi-Fi.
 - **Battery:** read through a 2:1 divider on GPIO4.
@@ -128,7 +129,7 @@ The ESP32-S3 successor to the T-Display, with a larger 1.9 inch screen on a fast
 
 ## Built to be ported
 
-The goal is that any ESP32 with Wi-Fi and a display can run ScreenAPI with one small file of board code. The firmware is split into three layers:
+The goal is that any ESP32 with Wi-Fi and a display can run McpVue with one small file of board code. The firmware is split into three layers:
 
 ```mermaid
 flowchart TB
@@ -191,12 +192,12 @@ On first start the board shows a QR code. Scan it with the **ESP BLE Provisionin
 
 ### 3. Connect your coding agent
 
-The endpoint is `http://screenapi.local/mcp`: MCP over plain HTTP, no login or token. Name the server `screen` in any client.
+The endpoint is `http://mcpvue.local/mcp`: MCP over plain HTTP, no login or token. Name the server `screen` in any client.
 
 **Claude Code**
 
 ```sh
-claude mcp add --transport http screen http://screenapi.local/mcp
+claude mcp add --transport http screen http://mcpvue.local/mcp
 ```
 
 Check it with `/mcp` inside Claude Code.
@@ -204,14 +205,14 @@ Check it with `/mcp` inside Claude Code.
 **Codex** (CLI, IDE extension, and desktop app share one config)
 
 ```sh
-codex mcp add screen --url http://screenapi.local/mcp
+codex mcp add screen --url http://mcpvue.local/mcp
 ```
 
 This adds the following to `~/.codex/config.toml`, which you can also write by hand:
 
 ```toml
 [mcp_servers.screen]
-url = "http://screenapi.local/mcp"
+url = "http://mcpvue.local/mcp"
 ```
 
 Check it with `codex mcp list` (status `enabled`) or `/mcp` inside Codex. Codex prints that the server "may or may not require login"; it does not, so skip `codex mcp login`.
@@ -226,7 +227,7 @@ OpenCode has no `mcp add` command; add the server to `~/.config/opencode/opencod
   "mcp": {
     "screen": {
       "type": "remote",
-      "url": "http://screenapi.local/mcp",
+      "url": "http://mcpvue.local/mcp",
       "enabled": true,
       "oauth": false
     }
@@ -236,11 +237,11 @@ OpenCode has no `mcp add` command; add the server to `~/.config/opencode/opencod
 
 `"oauth": false` stops OpenCode from looking for a login the display does not have. Check it with `opencode mcp list`, which should show `screen connected`.
 
-**Any other client:** point it at `http://screenapi.local/mcp` with the Streamable HTTP transport. The server answers in JSON and does not use sessions or server-to-client streams.
+**Any other client:** point it at `http://mcpvue.local/mcp` with the Streamable HTTP transport. The server answers in JSON and does not use sessions or server-to-client streams.
 
-On Linux, `.local` names need an mDNS resolver (`avahi-daemon` and `libnss-mdns`); otherwise use the IP address from the welcome screen in place of `screenapi.local`.
+On Linux, `.local` names need an mDNS resolver (`avahi-daemon` and `libnss-mdns`); otherwise use the IP address from the welcome screen in place of `mcpvue.local`.
 
-Every board answers at `screenapi.local`, so one setting works whichever board is plugged in. Keep one board online at a time; after switching boards, reconnect (`/mcp` in Claude Code or Codex, or restart OpenCode), and allow up to about 2 minutes for the old address to leave the mDNS cache.
+Every board answers at `mcpvue.local`, so one setting works whichever board is plugged in. Keep one board online at a time; after switching boards, reconnect (`/mcp` in Claude Code or Codex, or restart OpenCode), and allow up to about 2 minutes for the old address to leave the mDNS cache.
 
 ## Sending messages
 
@@ -265,7 +266,7 @@ Add these instructions to your project's `CLAUDE.md` (Claude Code) or `AGENTS.md
 ```markdown
 ## Status messages on the desk display
 
-Report task progress on the ScreenAPI display through its MCP tool `show_message` (server `screen`, `http://screenapi.local/mcp`).
+Report task progress on the McpVue display through its MCP tool `show_message` (server `screen`, `http://mcpvue.local/mcp`).
 
 - Task start: a timed message, `duration_s` 10, saying what the task is.
 - Each major step: a timed message, `duration_s` 10.
@@ -278,10 +279,10 @@ Report task progress on the ScreenAPI display through its MCP tool `show_message
 
 ### With curl
 
-Any HTTP client can send messages: the MCP endpoint takes plain JSON-RPC over POST, with no session or token. Set the URL once; if `screenapi.local` does not resolve on your machine, use the IP address shown in the top bar.
+Any HTTP client can send messages: the MCP endpoint takes plain JSON-RPC over POST, with no session or token. Set the URL once; if `mcpvue.local` does not resolve on your machine, use the IP address shown in the top bar.
 
 ```sh
-URL=http://screenapi.local/mcp    # or http://<ip-in-the-top-bar>/mcp
+URL=http://mcpvue.local/mcp    # or http://<ip-in-the-top-bar>/mcp
 ```
 
 ```sh
@@ -321,7 +322,7 @@ For quick notes from a terminal, a shell function (the text must not contain dou
 
 ```sh
 screen() {
-  curl -s http://screenapi.local/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,
+  curl -s http://mcpvue.local/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,
     "method":"tools/call","params":{"name":"show_message","arguments":{"value":"'"$1"'","duration_s":'"${2:-30}"'}}}'
   echo
 }
@@ -341,7 +342,7 @@ screen "Tea is ready" 60    # 60 s on screen; without a number, 30 s
 
 ## Project status
 
-ScreenAPI is an early MVP (firmware 0.0.x). All MVP features are implemented; on-device checks are still open for the latest graphics changes on the T-Display and for the display, touch, and Wi-Fi setup on the AMOLED board.
+McpVue is an early MVP (firmware 0.0.x). All MVP features are implemented; on-device checks are still open for the latest graphics changes on the T-Display and for the display, touch, and Wi-Fi setup on the AMOLED board.
 
 **Security:** the MCP endpoint has no authentication; anyone on your local network can post messages. It rejects requests from web pages (Origin check), but do not expose it to the internet. The clock's timezone lookup uses [ip-api.com](https://ip-api.com), free for non-commercial use.
 

@@ -23,6 +23,6 @@ constexpr int kCornerInset = 0;
 
 // Name for mDNS (<hostname>.local) and the MCP URL shown on screen. The same on
 // every board (D-033), so clients keep one URL whichever board is online.
-constexpr const char* kHostname = "screenapi";
+constexpr const char* kHostname = "mcpvue";
 
 }  // namespace board
